@@ -1,0 +1,42 @@
+name: Build Russian MyMinUI (m21)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Get this repository (patch and font)
+        uses: actions/checkout@v4
+
+      - name: Get MyMinUI sources (version 2c7a860) and apply the translation patch
+        run: |
+          git clone https://github.com/Turro75/MyMinUI.git src
+          cd src
+          git checkout 2c7a860
+          git apply ../patch_for_your_version_2c7a860.patch
+
+      - name: Build the compiler image (slow, 15-40 minutes)
+        run: |
+          cd src/toolchains/m21-toolchain
+          docker build -t m21-toolchain .
+
+      - name: Compile minarch and minui
+        run: |
+          docker run --rm -v "$PWD/src/workspace:/root/workspace" m21-toolchain /bin/bash -c '. /root/setup-env.sh && cd /root/workspace/all/minarch && make && cd /root/workspace/all/minui && make'
+
+      - name: Collect the files for the SD card
+        run: |
+          mkdir -p out/.system/m21/bin out/.system/res
+          cp src/workspace/all/minui/build/m21/minui.elf out/.system/m21/bin/
+          cp src/workspace/all/minarch/build/m21/minarch.elf out/.system/m21/bin/
+          cp src/skeleton/SYSTEM/res/lang.txt out/.system/res/
+          cp BPreplayBold-unhinted.otf out/.system/res/
+          cd out && zip -r ../SD_card_russian.zip .
+
+      - name: Publish the result
+        uses: actions/upload-artifact@v4
+        with:
+          name: SD_card_russian
+          path: SD_card_russian.zip
