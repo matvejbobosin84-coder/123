@@ -1,0 +1,507 @@
+diff --git a/skeleton/SYSTEM/res/lang.txt b/skeleton/SYSTEM/res/lang.txt
+new file mode 100644
+index 0000000..c84a26b
+--- /dev/null
++++ b/skeleton/SYSTEM/res/lang.txt
+@@ -0,0 +1,231 @@
++# Русский словарь для MyMinUI.
++# Формат строки:  English text => Русский текст
++# Строки с # в начале - комментарии. Если перевода нет, показывается английский текст.
++# Надписи из нескольких строк переводятся построчно.
++#
++# Режим журнала: пока ниже стоит строка #log, все надписи без перевода
++# записываются в файл  .userdata/shared/untranslated.txt  на SD-карте.
++# Пришлите этот файл, и я дополню словарь. Когда словарь готов, удалите строку #log.
++#log
++
++##### Главное меню #####
++Main Menu => Главное меню
++Recently Played => Недавние
++Favorites => Избранное
++Tools => Инструменты
++Empty folder => Пустая папка
++Recently Played? => Недавние игры?
++Are you sure you want to clear => Точно очистить список
++Model => Модель
++Release => Версия
++Commit => Коммит
++Mode => Режим
++IP Addr => IP-адрес
++Standard => Стандартный
++Simple (no Setting) => Простой (без настроек)
++Fancy (Boxart + State) => Расширенный (обложки)
++Disc 1 => Диск 1
++Disc 2 => Диск 2
++Disc 3 => Диск 3
++Disc 4 => Диск 4
++Disc 5 => Диск 5
++Disc 6 => Диск 6
++
++##### Подсказки кнопок #####
++OPEN => ОТКРЫТЬ
++INFO => ИНФО
++BACK => НАЗАД
++RUN => ЗАПУСК
++RUN2 => ЗАПУСК
++RSM => ПРОДОЛЖ.
++HIDE => СКРЫТЬ
++FAV => ИЗБР.
++MODE => РЕЖИМ
++SLP => СОН
++OFF => ВЫКЛ
++BOXART => ОБЛОЖКА
++OKAY => ОК
++CANCEL => ОТМЕНА
++CLEAR => ОЧИСТИТЬ
++SET => ЗАДАТЬ
++QUIT => ВЫХОД
++12 HOUR => 12 ЧАСОВ
++24 HOUR => 24 ЧАСА
++
++##### Выключение #####
++Quicksave created, => Быстрое сохранение создано,
++powering off => выключение
++power off now => можно выключать
++Powering off => Выключение
++Power off now => Можно выключать
++
++##### Меню паузы в игре #####
++Continue => Продолжить
++Save => Сохранить
++Load => Загрузить
++Options => Настройки
++Make Boxart => Сделать обложку
++Quit => Выйти
++Reset => Сброс
++No Preview => Нет превью
++Empty Slot => Пустой слот
++
++##### Раздел настроек #####
++Frontend => Интерфейс
++Emulator => Эмулятор
++Cheats => Читы
++Controls => Управление
++Shortcuts => Горячие клавиши
++Save Changes => Сохранить изменения
++Save for console => Сохранить для консоли
++Save for game => Сохранить для игры
++Restore defaults => Сбросить настройки
++Using defaults. => Стандартные настройки.
++Using console config. => Настройки консоли.
++Using game config. => Настройки игры.
++Saved for console. => Сохранено для консоли.
++Saved for game. => Сохранено для игры.
++Restored console defaults. => Настройки консоли сброшены.
++Restored defaults. => Настройки сброшены.
++This core has no options. => У этого ядра нет настроек.
++No cheat file loaded. => Файл читов не загружен.
++
++##### Настройки эмулятора #####
++Screen Scaling => Масштаб экрана
++Screen Effect => Эффект экрана
++Screen Scaler => Метод масштаба
++Max Upscale => Макс. увеличение
++Prevent Tearing => Без разрывов кадра
++Core Sync => Синхронизация ядра
++CPU Speed => Скорость CPU
++Thread Core => Ядро в потоке
++Debug HUD => Отладочная панель
++Max FF Speed => Макс. ускорение
++Play as Player => Играть за игрока
++Select the maximum upscale factor. => Выбор максимального увеличения.
++Native uses integer scaling. => Родной: целочисленный масштаб.
++Aspect uses core reported aspect ratio. => Пропорции: как сообщает ядро.
++Extended is like aspect but the it extends the image to fit 3/4 of screen. => Расширенный: как пропорции, но занимает 3/4 экрана.
++Fullscreen has non-squarepixels. => Во весь экран: пиксели не квадратные.
++Force 4:3 and 3:2 guess what? => Принудительно 4:3 или 3:2.
++Grid simulates an LCD grid. => Сетка имитирует сетку LCD.
++Line simulates CRT scanlines. => Линии имитируют развёртку ЭЛТ.
++Effects usually look best at native scaling. => Эффекты лучше смотрятся в родном масштабе.
++Sharp uses bilinear sharp sampling => Резкий: билинейная выборка
++Near uses nearest neighbor sampling (forced when scaling=native). => Ближний: выборка по ближайшему (при родном масштабе).
++Wait for vsync before drawing the next frame. => Ждать вертикальную синхронизацию перед кадром.
++Lenient only waits when within frame budget. => Мягкий: ждёт, только если успевает.
++Strict always waits. => Строгий: ждёт всегда.
++Over- or underclock the CPU to prioritize => Разгон или снижение частоты CPU:
++pure performance or power savings. => скорость или экономия заряда.
++Move emulation to a thread. => Эмуляция в отдельном потоке.
++Prevents audio crackle but may => Убирает треск звука, но может
++cause dropped frames. => пропускать кадры.
++Show frames per second, cpu load, => Показать FPS, нагрузку CPU,
++resolution, and scaler information. => разрешение и данные о масштабе.
++Fast forward will not exceed the => Ускорение не превысит
++selected speed (but may be less => выбранную скорость (может быть
++depending on game and emulator). => ниже, зависит от игры и эмулятора).
++Set the current player controller => Выбор игрока, чей геймпад
++can be changed during the game => можно менять во время игры,
++depending on game and emulator. => зависит от игры и эмулятора.
++
++##### Значения #####
++Off => Выкл
++On => Вкл
++OFF => ВЫКЛ
++ON => ВКЛ
++None => Нет
++NONE => НЕТ
++disabled => выключено
++enabled => включено
++Disabled => Выключено
++Enabled => Включено
++Auto => Авто
++Native => Родной
++Aspect => Пропорции
++Extended => Расширенный
++Fullscreen => Во весь экран
++Force 4:3 => Принуд. 4:3
++Force 3:2 => Принуд. 3:2
++Line => Линии
++Grid => Сетка
++Near => Ближний
++Sharp => Резкий
++Lenient => Мягкий
++Strict => Строгий
++Powersave => Экономия
++Normal => Обычный
++Performance => Скорость
++Max => Макс
++Standard => Стандартный
++Controller => Контроллер
++Select the type of controller. => Выбор типа контроллера.
++
++##### Управление и горячие клавиши #####
++Press A to set and X to clear. => A - назначить, X - очистить.
++Supports single button and MENU+button. => Одна кнопка или MENU+кнопка.
++MapABXYtoRightStick => ABXY на правый стик
++MapLeftSticktoDPad => Левый стик на крестовину
++Map ABXY buttons to right stick. => Кнопки ABXY работают как правый стик.
++Map left stick to DPad buttons. => Левый стик работает как крестовина.
++Up => Вверх
++Down => Вниз
++Left => Влево
++Right => Вправо
++Select => Select
++Start => Start
++A Button => Кнопка A
++B Button => Кнопка B
++X Button => Кнопка X
++Y Button => Кнопка Y
++L1 Button => Кнопка L1
++R1 Button => Кнопка R1
++L2 Button => Кнопка L2
++R2 Button => Кнопка R2
++L3 Button => Кнопка L3
++R3 Button => Кнопка R3
++A Turbo => Турбо A
++B Turbo => Турбо B
++X Turbo => Турбо X
++Y Turbo => Турбо Y
++Prev. Palette => Пред. палитра
++Next Palette => След. палитра
++UP => ВВЕРХ
++DOWN => ВНИЗ
++LEFT => ВЛЕВО
++RIGHT => ВПРАВО
++MENU+UP => MENU+ВВЕРХ
++MENU+DOWN => MENU+ВНИЗ
++MENU+LEFT => MENU+ВЛЕВО
++MENU+RIGHT => MENU+ВПРАВО
++Save State => Сохранить
++Load State => Загрузить
++Reset Game => Сбросить игру
++Save & Quit => Сохранить и выйти
++Cycle Scaling => Смена масштаба
++Cycle Effect => Смена эффекта
++Toggle FF => Ускорение (вкл/выкл)
++Hold FF => Ускорение (удержание)
++
++##### Параметры ядра Game Boy (Gambatte) #####
++GB Colorization => Раскраска GB
++Internal Palette => Встроенная палитра
++>TWB64 - Pack 1 Palette => >Палитры TWB64, набор 1
++>TWB64 - Pack 2 Palette => >Палитры TWB64, набор 2
++>TWB64 - Pack 3 Palette => >Палитры TWB64, набор 3
++>PixelShift - Pack 1 Palette => >Палитры PixelShift, набор 1
++Color Correction => Коррекция цвета
++Color Correction Mode => Режим коррекции цвета
++Color Correction - Frontlight Position => Коррекция цвета: положение подсветки
++Dark Filter Level (%) => Уровень затемнения (%)
++Interframe Blending => Смешивание кадров
++Emulated Hardware (Restart Required) => Модель консоли (нужен перезапуск)
++Use Official Bootloader (Restart Required) => Официальный загрузчик (нужен перезапуск)
++Allow Opposing Directions => Разрешить противоположные направления
++Turbo Button Period => Период турбо-кнопки
++Controller Rumble Strength => Сила вибрации
++GBC Only => Только GBC
++Accurate => Точная
++Central => По центру
++Enables haptic feedback effects for supported games (Pokemon Pinball, Perfect Dark...). => Вибрация в поддерживаемых играх (Pokemon Pinball, Perfect Dark...).
+diff --git a/workspace/all/common/api.c b/workspace/all/common/api.c
+index d0b0bfd..8f40587 100644
+--- a/workspace/all/common/api.c
++++ b/workspace/all/common/api.c
+@@ -17,6 +17,7 @@
+ #include "defines.h"
+ #include "api.h"
+ #include "utils.h"
++#include "i18n_impl.h"
+ 
+ ///////////////////////////////
+ 
+@@ -513,13 +514,22 @@ void GFX_delay(void) {
+ 
+ int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding) {
+ 	int text_width;
+-	strcpy(out_name, in_name);
++	strcpy(out_name, I18N_T(in_name));
+ 	TTF_SizeUTF8(font, out_name, &text_width, NULL);
+ 	text_width += padding;
+-	
++
+ 	while (text_width>max_width) {
+ 		int len = strlen(out_name);
+-		strcpy(&out_name[len-4], "...\0");
++		int cut = len - 4;
++		// never cut in the middle of a multi-byte (UTF-8) character
++		while (cut>0 && (out_name[cut] & 0xC0)==0x80) cut--;
++		if (cut<=0) {
++			strcpy(out_name, "...");
++			TTF_SizeUTF8(font, out_name, &text_width, NULL);
++			text_width += padding;
++			break;
++		}
++		strcpy(&out_name[cut], "...");
+ 		TTF_SizeUTF8(font, out_name, &text_width, NULL);
+ 		text_width += padding;
+ 	}
+diff --git a/workspace/all/common/api.h b/workspace/all/common/api.h
+index 9b7bb4b..663c908 100644
+--- a/workspace/all/common/api.h
++++ b/workspace/all/common/api.h
+@@ -3,6 +3,7 @@
+ #include "sdl.h"
+ #include "platform.h"
+ #include "scaler.h"
++#include "i18n.h"
+ 
+ ///////////////////////////////
+ 
+diff --git a/workspace/all/common/i18n.h b/workspace/all/common/i18n.h
+new file mode 100644
+index 0000000..a22ad38
+--- /dev/null
++++ b/workspace/all/common/i18n.h
+@@ -0,0 +1,24 @@
++#ifndef I18N_H
++#define I18N_H
++
++// Runtime translation. Dictionary file: <sdcard>/.system/res/lang.txt
++// Format, one entry per line:   English text => Русский текст
++// Lines starting with # are comments. Missing file or missing entry = original text.
++// If the dictionary contains the line   #log   every text that has no translation is
++// appended to <sdcard>/.userdata/shared/untranslated.txt (one per line, no duplicates).
++
++const char* I18N_T(const char* text);
++
++// Every text measured or drawn through SDL_ttf passes through the dictionary.
++// A function-like macro is not re-expanded inside its own expansion, so the
++// inner name below is the real SDL_ttf function.
++#ifdef TTF_RenderUTF8_Blended
++#undef TTF_RenderUTF8_Blended
++#endif
++#ifdef TTF_SizeUTF8
++#undef TTF_SizeUTF8
++#endif
++#define TTF_RenderUTF8_Blended(font, text, color) TTF_RenderUTF8_Blended((font), I18N_T(text), (color))
++#define TTF_SizeUTF8(font, text, w, h) TTF_SizeUTF8((font), I18N_T(text), (w), (h))
++
++#endif
+diff --git a/workspace/all/common/i18n_impl.h b/workspace/all/common/i18n_impl.h
+new file mode 100644
+index 0000000..04b23d3
+--- /dev/null
++++ b/workspace/all/common/i18n_impl.h
+@@ -0,0 +1,154 @@
++// Implementation of the runtime dictionary (included once, from api.c).
++// Kept separate from api.c so it can be unit-tested on a PC.
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#ifndef I18N_DICT_PATH
++#define I18N_DICT_PATH RES_PATH "/lang.txt"
++#endif
++#ifndef I18N_LOG_PATH
++#define I18N_LOG_PATH SHARED_USERDATA_PATH "/untranslated.txt"
++#endif
++
++typedef struct {
++	char* key;
++	char* val;
++} I18N_Entry;
++
++static struct {
++	int loaded;
++	int logging;
++	char* data;          // whole file, modified in place
++	I18N_Entry* table;   // open addressing, size is a power of two
++	unsigned size;
++	unsigned count;
++	// misses already logged this session (to avoid duplicates)
++	char** seen;
++	unsigned seen_count;
++	unsigned seen_cap;
++} i18n;
++
++static unsigned I18N_hash(const char* s) {
++	unsigned h = 2166136261u;
++	while (*s) {
++		h ^= (unsigned char)*s++;
++		h *= 16777619u;
++	}
++	return h;
++}
++
++static void I18N_insert(char* key, char* val) {
++	unsigned i = I18N_hash(key) & (i18n.size - 1);
++	while (i18n.table[i].key) {
++		if (!strcmp(i18n.table[i].key, key)) { // later entry wins
++			i18n.table[i].val = val;
++			return;
++		}
++		i = (i + 1) & (i18n.size - 1);
++	}
++	i18n.table[i].key = key;
++	i18n.table[i].val = val;
++	i18n.count++;
++}
++
++static char* I18N_trim(char* s) {
++	while (*s==' ' || *s=='\t') s++;
++	char* e = s + strlen(s);
++	while (e>s && (e[-1]==' ' || e[-1]=='\t')) *--e = '\0';
++	return s;
++}
++
++static void I18N_load(void) {
++	i18n.loaded = 1;
++	FILE* f = fopen(I18N_DICT_PATH, "rb");
++	if (!f) return;
++	fseek(f, 0, SEEK_END);
++	long len = ftell(f);
++	fseek(f, 0, SEEK_SET);
++	if (len<=0 || len>(4L*1024*1024)) { fclose(f); return; }
++	i18n.data = malloc(len + 1);
++	if (!i18n.data) { fclose(f); return; }
++	size_t got = fread(i18n.data, 1, len, f);
++	fclose(f);
++	i18n.data[got] = '\0';
++
++	char* p = i18n.data;
++	if ((unsigned char)p[0]==0xEF && (unsigned char)p[1]==0xBB && (unsigned char)p[2]==0xBF) p += 3; // BOM
++
++	// count lines to size the table
++	unsigned lines = 1;
++	for (char* c = p; *c; c++) if (*c=='\n') lines++;
++	unsigned size = 64;
++	while (size < lines * 2) size <<= 1;
++	i18n.table = calloc(size, sizeof(I18N_Entry));
++	if (!i18n.table) { free(i18n.data); i18n.data = NULL; return; }
++	i18n.size = size;
++
++	while (*p) {
++		char* eol = strchr(p, '\n');
++		if (eol) *eol = '\0';
++		char* next = eol ? eol + 1 : p + strlen(p);
++
++		size_t l = strlen(p);
++		if (l && p[l-1]=='\r') p[l-1] = '\0';
++
++		if (p[0]=='#') {
++			if (!strcmp(I18N_trim(p), "#log")) i18n.logging = 1;
++		}
++		else if (p[0]) {
++			char* sep = strstr(p, " => ");
++			if (sep) {
++				*sep = '\0';
++				char* key = I18N_trim(p);
++				char* val = I18N_trim(sep + 4);
++				if (key[0] && val[0]) I18N_insert(key, val);
++			}
++		}
++		p = next;
++	}
++}
++
++static void I18N_logMiss(const char* text) {
++	for (unsigned i=0; i<i18n.seen_count; i++) {
++		if (!strcmp(i18n.seen[i], text)) return;
++	}
++	if (i18n.seen_count==i18n.seen_cap) {
++		unsigned cap = i18n.seen_cap ? i18n.seen_cap * 2 : 128;
++		char** grown = realloc(i18n.seen, cap * sizeof(char*));
++		if (!grown) return;
++		i18n.seen = grown;
++		i18n.seen_cap = cap;
++	}
++	char* copy = strdup(text);
++	if (!copy) return;
++	i18n.seen[i18n.seen_count++] = copy;
++
++	FILE* f = fopen(I18N_LOG_PATH, "ab");
++	if (!f) return;
++	fprintf(f, "%s\n", text);
++	fclose(f);
++}
++
++static int I18N_hasLetters(const char* s) {
++	for (; *s; s++) {
++		unsigned char c = (unsigned char)*s;
++		if ((c>='A' && c<='Z') || (c>='a' && c<='z')) return 1;
++	}
++	return 0;
++}
++
++const char* I18N_T(const char* text) {
++	if (!text || !text[0]) return text;
++	if (!i18n.loaded) I18N_load();
++	if (!i18n.table) return text;
++
++	unsigned i = I18N_hash(text) & (i18n.size - 1);
++	while (i18n.table[i].key) {
++		if (!strcmp(i18n.table[i].key, text)) return i18n.table[i].val;
++		i = (i + 1) & (i18n.size - 1);
++	}
++	if (i18n.logging && I18N_hasLetters(text)) I18N_logMiss(text);
++	return text;
++}
+diff --git a/workspace/all/minarch/minarch.c b/workspace/all/minarch/minarch.c
+index 997b0af..a466f2e 100644
+--- a/workspace/all/minarch/minarch.c
++++ b/workspace/all/minarch/minarch.c
+@@ -1836,9 +1836,10 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
+ 			strcpy(item->name, def->desc);
+ 			
+ 			if (def->info) {
+-				len = strlen(def->info) + 1;
++				const char* info_tr = I18N_T(def->info); // translated before wrapping, so lines wrap correctly
++				len = strlen(info_tr) + 1;
+ 				item->desc = calloc(len, sizeof(char));
+-				strncpy(item->desc, def->info, len);
++				strncpy(item->desc, info_tr, len);
+ 
+ 				item->full = calloc(len, sizeof(char));
+ 				strncpy(item->full, item->desc, len);
+@@ -4850,9 +4851,10 @@ static int OptionCheats_openMenu(MenuList* list, int i) {
+ 			strcpy(item->name, cheat->name);
+ 
+ 			if(cheat->info) {
+-				len = strlen(cheat->info) + 1;
++				const char* info_tr = I18N_T(cheat->info);
++				len = strlen(info_tr) + 1;
+ 				item->desc = calloc(len, sizeof(char));
+-				strncpy(item->desc, cheat->info, len);
++				strncpy(item->desc, info_tr, len);
+ 				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
+ 			}
+ 
