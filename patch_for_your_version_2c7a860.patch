@@ -281,7 +281,7 @@ index 0000000..76f38c0
 +ToggleHideState => Скрыть превью сохранения
 +ToggleHideBOXARTifState => Скрыть обложку при сохранении
 diff --git a/workspace/all/common/api.c b/workspace/all/common/api.c
-index d0b0bfd..2529a56 100644
+index d0b0bfd..2fd45be 100644
 --- a/workspace/all/common/api.c
 +++ b/workspace/all/common/api.c
 @@ -17,6 +17,7 @@
@@ -292,7 +292,16 @@ index d0b0bfd..2529a56 100644
  
  ///////////////////////////////
  
-@@ -513,13 +514,22 @@ void GFX_delay(void) {
+@@ -203,6 +204,8 @@ static struct PWR_Context {
+ 
+ 	SDL_Surface* overlay;
+ } pwr = {0};
++#include "uihelp_impl.h"
++
+ 
+ #define BATCH_SIZE_NOFIX 400
+ 
+@@ -513,13 +516,22 @@ void GFX_delay(void) {
  
  int GFX_truncateText(TTF_Font* font, const char* in_name, char* out_name, int max_width, int padding) {
  	int text_width;
@@ -318,7 +327,54 @@ index d0b0bfd..2529a56 100644
  		TTF_SizeUTF8(font, out_name, &text_width, NULL);
  		text_width += padding;
  	}
-@@ -2362,6 +2372,8 @@ void PWR_powerOff(void) {
+@@ -843,34 +855,9 @@ void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
+ 	GFX_blitAsset(asset, &(SDL_Rect){r,r,r,r}, dst, &(SDL_Rect){x+w-r,y+h-r});
+ }
+ void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
+-	// LOG_info("dst: %p\n", dst);
+-	
+-	if (!dst_rect) dst_rect = &(SDL_Rect){0,0,0,0};
+-	
+-	SDL_Rect rect = asset_rects[ASSET_BATTERY];
+-	int x = dst_rect->x;
+-	int y = dst_rect->y;
+-	x += (SCALE1(PILL_SIZE) - (rect.w + FIXED_SCALE)) / 2;
+-	y += (SCALE1(PILL_SIZE) - rect.h) / 2;
+-	
+-	if (pwr.is_charging) {
+-		GFX_blitAsset(ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y});
+-		GFX_blitAsset(ASSET_BATTERY_BOLT, NULL, dst, &(SDL_Rect){x+SCALE1(3),y+SCALE1(2)});
+-	}
+-	else {
+-		int percent = pwr.charge;
+-		GFX_blitAsset(percent<=10?ASSET_BATTERY_LOW:ASSET_BATTERY, NULL, dst, &(SDL_Rect){x,y});
+-		
+-		rect = asset_rects[ASSET_BATTERY_FILL];
+-		SDL_Rect clip = rect;
+-		clip.w *= percent;
+-		clip.w /= 100;
+-		if (clip.w<=0) return;
+-		clip.x = rect.w - clip.w;
+-		clip.y = 0;
+-		
+-		GFX_blitAsset(percent<=20?ASSET_BATTERY_FILL_LOW:ASSET_BATTERY_FILL, &clip, dst, &(SDL_Rect){x+SCALE1(3)+clip.x,y+SCALE1(2)});
+-	}
++	// with a rect: icon + percentage in the status pill; without (overlay): icon only
++	if (!dst_rect) { UI_drawBattery(dst, 0, 0, SCALE1(PILL_SIZE), 0); return; }
++	UI_drawBattery(dst, dst_rect->x, dst_rect->y, SCALE1(PILL_SIZE), 1);
+ }
+ int GFX_getButtonWidth(char* hint, char* button) {
+ 	int button_width = 0;
+@@ -1034,7 +1021,7 @@ int GFX_blitHardwareGroup(SDL_Surface* dst, int show_setting, int _fancy_mode) {
+ 		int show_wifi = PLAT_isOnline(); // NOOOOO! not every frame!
+ 
+ 		int ww = SCALE1(PILL_SIZE-3);
+-		ow = SCALE1(PILL_SIZE);
++		ow = UI_batteryWidth();
+ 		if (show_wifi) ow += ww;
+ 
+ 		ox = dst->w - SCALE1((PADDING - (PADDING*_fancy_mode))) - ow;
+@@ -2362,6 +2349,8 @@ void PWR_powerOff(void) {
  	}
  }
  
@@ -327,7 +383,7 @@ index d0b0bfd..2529a56 100644
  static void PWR_enterSleep(void) {
  	SDL_PauseAudio(1);
  	if (GetHDMI()) {
-@@ -2405,6 +2417,11 @@ static void PWR_waitForWake(void) {
+@@ -2405,6 +2394,11 @@ static void PWR_waitForWake(void) {
  void PWR_fauxSleep(void) {
  	GFX_clear(gfx.screen);
  	PAD_reset();
@@ -340,7 +396,7 @@ index d0b0bfd..2529a56 100644
  	PWR_waitForWake();
  	PWR_exitSleep();
 diff --git a/workspace/all/common/api.h b/workspace/all/common/api.h
-index 9b7bb4b..663c908 100644
+index 9b7bb4b..de84f3e 100644
 --- a/workspace/all/common/api.h
 +++ b/workspace/all/common/api.h
 @@ -3,6 +3,7 @@
@@ -351,6 +407,14 @@ index 9b7bb4b..663c908 100644
  
  ///////////////////////////////
  
+@@ -305,6 +306,7 @@ void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* ds
+ void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
+ void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
+ void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
++void GFX_showLoading(void); // LOADING screen while a game starts
+ int GFX_getButtonWidth(char* hint, char* button);
+ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
+ void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_rect);
 diff --git a/workspace/all/common/i18n.h b/workspace/all/common/i18n.h
 new file mode 100644
 index 0000000..a22ad38
@@ -543,23 +607,24 @@ index 0000000..04b23d3
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..375df7c
+index 0000000..0ca3b56
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,227 @@
 +// Standby screen (clock + animation) shown before the real sleep.
 +// Included from api.c.
 +//  - Disable:  create empty file  .userdata/shared/disable-standby
 +//  - Own animation: PNG frames  .system/res/standby/0.png, 1.png, 2.png ...  (up to 150)
 +//    optional  .system/res/standby/delay.txt  with delay between frames in ms (default 100)
-+//  - Time on screen (not charging): file .userdata/shared/standby-seconds with a number of seconds (default 90)
++//  - Time on screen (not charging): file .userdata/shared/standby-seconds with a number of seconds (default 300)
 +#include <time.h>
 +
 +#define STANDBY_DISABLE_PATH SHARED_USERDATA_PATH "/disable-standby"
 +#define STANDBY_DIR RES_PATH "/standby"
 +#define STANDBY_MAX_FRAMES 150
-+#define STANDBY_SECONDS 90 // default when not charging; while charging it stays on
++#define STANDBY_SECONDS 300 // default when not charging; while charging it stays on
 +#define STANDBY_SECONDS_PATH SHARED_USERDATA_PATH "/standby-seconds" // optional: file with a number
++#define STANDBY_SECONDS_PATH2 SHARED_USERDATA_PATH "/standby-seconds.txt" // Windows often hides the .txt
 +
 +static void SB_circle(SDL_Surface* d, int cx, int cy, int r, Uint32 c) {
 +	for (int dy=-r; dy<=r; dy++) {
@@ -595,7 +660,7 @@ index 0000000..375df7c
 +}
 +
 +static void SB_blitCentered(SDL_Surface* d, TTF_Font* f, const char* s, int y, SDL_Color c) {
-+	int sh = f==NULL ? 0 : 2*FIXED_SCALE/2;
++	int sh = FIXED_SCALE;
 +	SDL_Surface* t = SB_text(f, s, (SDL_Color){0,0,0});
 +	if (t) { SDL_BlitSurface(t, NULL, d, &(SDL_Rect){(d->w-t->w)/2+sh+1, y+sh+1}); SDL_FreeSurface(t); }
 +	t = SB_text(f, s, c);
@@ -654,23 +719,39 @@ index 0000000..375df7c
 +
 +	int seconds = STANDBY_SECONDS;
 +	{
-+		FILE* f = fopen(STANDBY_SECONDS_PATH, "r");
-+		if (f) { int v = 0; if (fscanf(f, "%d", &v)==1 && v>=5 && v<=3600) seconds = v; fclose(f); }
++		const char* paths[2] = {STANDBY_SECONDS_PATH, STANDBY_SECONDS_PATH2};
++		for (int i=0; i<2; i++) {
++			FILE* f = fopen(paths[i], "r");
++			if (!f) continue;
++			char buf[64] = {0};
++			size_t n = fread(buf, 1, sizeof(buf)-1, f);
++			fclose(f);
++			buf[n] = '\0';
++			char* p = buf;
++			while (*p && (*p<'0' || *p>'9')) p++; // skip BOM / spaces
++			if (*p) {
++				int v = atoi(p);
++				if (v>=5 && v<=3600) { seconds = v; break; }
++			}
++		}
 +	}
 +	while (SDL_PollEvent(&(SDL_Event){0})) {} // drop old events
 +	uint32_t start = SDL_GetTicks();
 +	uint32_t checked = start;
 +	int charging = pwr.is_charging;
 +	int woke = 0;
++	int last_idx = -1;
++	int last_sec = -1;
 +
 +	while (1) {
++		uint32_t loop_t0 = SDL_GetTicks();
 +		SDL_Event ev;
 +		while (SDL_PollEvent(&ev)) {
 +			if (ev.type==SDL_KEYDOWN || ev.type==SDL_JOYBUTTONDOWN) woke = 1;
 +		}
 +		if (woke) break;
 +
-+		uint32_t now = SDL_GetTicks();
++		uint32_t now = loop_t0;
 +		if (now-checked>=2000) {
 +			int ch = 0, lvl = 0;
 +			PLAT_getBatteryStatus(&ch, &lvl);
@@ -679,11 +760,16 @@ index 0000000..375df7c
 +		}
 +		if (!charging && now-start>=(uint32_t)seconds*1000) break;
 +
-+		if (nframes>0) SB_blitFrame(screen, frames[((now-start)/delay) % nframes]);
-+		else SB_drawBackground(screen, now-start);
-+
 +		time_t tt = time(NULL);
 +		struct tm* lt = localtime(&tt);
++		int idx = nframes>0 ? (int)(((now-start)/delay) % nframes) : (int)((now-start)/33);
++		int sec = lt ? lt->tm_min*60+lt->tm_sec : 0;
++		if (idx==last_idx && sec==last_sec) { SDL_Delay(3); continue; } // nothing new to draw
++		last_idx = idx; last_sec = sec;
++
++		if (nframes>0) SB_blitFrame(screen, frames[idx]);
++		else SB_drawBackground(screen, now-start);
++
 +		char buf[64];
 +		if (lt) {
 +			snprintf(buf, sizeof(buf), "%02d:%02d", lt->tm_hour, lt->tm_min);
@@ -695,7 +781,9 @@ index 0000000..375df7c
 +
 +		GFX_flip(screen);
 +		GFX_pan();
-+		SDL_Delay(16);
++		// if flip did not wait for vsync, do not spin faster than ~60 fps
++		uint32_t took = SDL_GetTicks() - loop_t0;
++		if (took<8) SDL_Delay(8-took);
 +	}
 +
 +	for (int i=0; i<nframes; i++) SDL_FreeSurface(frames[i]);
@@ -704,8 +792,146 @@ index 0000000..375df7c
 +	return woke;
 +}
 +
++
++// "LOADING" screen shown while a game / program is starting
++void GFX_showLoading(void) {
++	SDL_Surface* screen = gfx.screen;
++	if (!screen) return;
++
++	SDL_Surface* img = IMG_Load(STANDBY_DIR "/0.png");
++	SDL_Surface* conv = img ? SDL_ConvertSurface(img, screen->format, 0) : NULL;
++	if (img) SDL_FreeSurface(img);
++	if (conv) { SB_blitFrame(screen, conv); SDL_FreeSurface(conv); }
++	else SB_drawBackground(screen, 0);
++
++	TTF_Font* f = TTF_OpenFont(RES_PATH "/loading.otf", SCALE1(40));
++	int own = f!=NULL;
++	if (!f) f = font.large;
++
++	const char* word = "LOADING";
++	int spacing = SCALE1(7);
++	int total = 0, n = (int)strlen(word);
++	int wch[16];
++	for (int i=0; i<n; i++) {
++		char ch[2] = {word[i], 0};
++		wch[i] = UI_textWidth(f, ch);
++		total += wch[i] + (i<n-1 ? spacing : 0);
++	}
++	int y = screen->h*38/100;
++	int x = (screen->w - total)/2;
++	for (int i=0; i<n; i++) {
++		char ch[2] = {word[i], 0};
++		SDL_Surface* sh = UI_text(f, ch, (SDL_Color){0,0,0});
++		SDL_Surface* t = UI_text(f, ch, (SDL_Color){0xE8,0xEA,0xFF});
++		if (sh) { SDL_BlitSurface(sh, NULL, screen, &(SDL_Rect){x+FIXED_SCALE*2, y+FIXED_SCALE*2}); SDL_FreeSurface(sh); }
++		if (t) { SDL_BlitSurface(t, NULL, screen, &(SDL_Rect){x, y}); SDL_FreeSurface(t); }
++		x += wch[i] + spacing;
++	}
++	// thin ornament under the word
++	int lw = total*70/100;
++	int ly = y + SCALE1(54);
++	Uint32 line = SDL_MapRGB(screen->format, 0x8B,0x7B,0xD8);
++	SDL_FillRect(screen, &(SDL_Rect){(screen->w-lw)/2, ly, lw, FIXED_SCALE}, line);
++	UI_fillRound(screen, screen->w/2-FIXED_SCALE*3, ly-FIXED_SCALE*2, FIXED_SCALE*6, FIXED_SCALE*6, FIXED_SCALE*3, line);
++
++	if (own) TTF_CloseFont(f);
++	GFX_flip(screen);
++	GFX_pan();
++}
+diff --git a/workspace/all/common/uihelp_impl.h b/workspace/all/common/uihelp_impl.h
+new file mode 100644
+index 0000000..79ec550
+--- /dev/null
++++ b/workspace/all/common/uihelp_impl.h
+@@ -0,0 +1,86 @@
++// Small drawing helpers shared by the new UI parts (included from api.c)
++
++// filled rounded rectangle using only SDL_FillRect (works for any pixel format)
++static void UI_fillRound(SDL_Surface* dst, int x, int y, int w, int h, int r, Uint32 c) {
++	if (w<=0 || h<=0) return;
++	if (r*2>h) r = h/2;
++	if (r*2>w) r = w/2;
++	for (int dy=0; dy<r; dy++) {
++		int yy = 2*(r-dy)-1;
++		int lim = 4*r*r - yy*yy;
++		int k = 0;
++		while ((2*(k+1))*(2*(k+1)) <= lim) k++;
++		int inset = r - k;
++		SDL_FillRect(dst, &(SDL_Rect){x+inset, y+dy, w-inset*2, 1}, c);
++		SDL_FillRect(dst, &(SDL_Rect){x+inset, y+h-1-dy, w-inset*2, 1}, c);
++	}
++	SDL_FillRect(dst, &(SDL_Rect){x, y+r, w, h-r*2}, c);
++}
++
++// text without the translation macro (numbers, clock, ...)
++static SDL_Surface* UI_text(TTF_Font* f, const char* s, SDL_Color c) {
++	return (TTF_RenderUTF8_Blended)(f, s, c);
++}
++static int UI_textWidth(TTF_Font* f, const char* s) {
++	int w = 0;
++	(TTF_SizeUTF8)(f, s, &w, NULL);
++	return w;
++}
++
++// ---- battery: rounded icon with coloured fill + percentage ----
++static int UI_batteryTextWidth(void) {
++	return UI_textWidth(font.tiny, "100%");
++}
++// total width of the battery block (icon + text)
++static int UI_batteryWidth(void) {
++	int u = FIXED_SCALE;
++	return 6*u + 22*u + 2*u + 4*u + UI_batteryTextWidth() + 6*u;
++}
++
++static void UI_drawBattery(SDL_Surface* dst, int x, int y, int cell_h, int with_text) {
++	int u = FIXED_SCALE;
++	int pct = pwr.charge;
++	if (pct<0) pct = 0;
++	if (pct>100) pct = 100;
++	int bw = 22*u, bh = 11*u;
++	int bx = x + (with_text ? 6*u : (cell_h - bw)/2);
++	int by = y + (cell_h - bh)/2;
++
++	Uint32 rim   = SDL_MapRGB(dst->format, 0xE5,0xE7,0xEB);
++	Uint32 inner = SDL_MapRGB(dst->format, 0x1F,0x29,0x37);
++	Uint32 col;
++	if (pwr.is_charging || pct>=50) col = SDL_MapRGB(dst->format, 0x4A,0xDE,0x80);
++	else if (pct>=20)               col = SDL_MapRGB(dst->format, 0xFB,0xBF,0x24);
++	else                            col = SDL_MapRGB(dst->format, 0xF8,0x71,0x71);
++
++	UI_fillRound(dst, bx, by, bw, bh, 3*u, rim);
++	UI_fillRound(dst, bx+u, by+u, bw-2*u, bh-2*u, 2*u, inner);
++	SDL_FillRect(dst, &(SDL_Rect){bx+bw, by+bh/4, 2*u, bh/2}, rim);
++
++	int fw = (bw-4*u) * pct / 100;
++	if (pct>0 && fw<2*u) fw = 2*u;
++	UI_fillRound(dst, bx+2*u, by+2*u, fw, bh-4*u, u, col);
++
++	if (pwr.is_charging) {
++		// lightning bolt (6x10 bitmap) in the middle of the icon
++		static const char* bolt[10] = {
++			"...###", "..###.", ".###..", "######", "..###.",
++			".###..", "###...", "##....", "#.....", "......"
++		};
++		int s = u>1 ? u/2 : 1; if (s<1) s = 1;
++		int ox = bx + (bw - 6*s)/2, oy = by + (bh - 9*s)/2;
++		Uint32 dark = SDL_MapRGB(dst->format, 0xFF,0xFF,0xFF);
++		for (int r=0; r<9; r++) for (int c=0; c<6; c++) if (bolt[r][c]=='#')
++			SDL_FillRect(dst, &(SDL_Rect){ox+c*s, oy+r*s, s, s}, dark);
++	}
++
++	if (with_text) {
++		char buf[8];
++		snprintf(buf, sizeof(buf), "%d%%", pct);
++		SDL_Surface* t = UI_text(font.tiny, buf, (SDL_Color){255,255,255});
++		if (t) {
++			SDL_BlitSurface(t, NULL, dst, &(SDL_Rect){bx+bw+2*u+4*u, y+(cell_h-t->h)/2});
++			SDL_FreeSurface(t);
++		}
++	}
++}
 diff --git a/workspace/all/minarch/minarch.c b/workspace/all/minarch/minarch.c
-index 997b0af..a466f2e 100644
+index 997b0af..dbbd562 100644
 --- a/workspace/all/minarch/minarch.c
 +++ b/workspace/all/minarch/minarch.c
 @@ -1836,9 +1836,10 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
@@ -734,8 +960,16 @@ index 997b0af..a466f2e 100644
  				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
  			}
  
+@@ -6012,6 +6014,7 @@ int main(int argc , char* argv[]) {
+ 	}
+ 	sprintf(cpuload,"0");
+ 	screen = GFX_init(MODE_MENU);
++	GFX_showLoading();
+ 	screengame = PLAT_getScreenGame();
+ 	renderer.rotate = (renderer.rotate + PLAT_getScreenRotation(1)) & 3;
+ 	setOverclock(overclock); // default to normal
 diff --git a/workspace/all/minui/minui.c b/workspace/all/minui/minui.c
-index 6fcba42..dc103cb 100644
+index 6fcba42..a55503d 100644
 --- a/workspace/all/minui/minui.c
 +++ b/workspace/all/minui/minui.c
 @@ -1,4 +1,5 @@
@@ -744,7 +978,15 @@ index 6fcba42..dc103cb 100644
  #include <stdlib.h>
  #include <msettings.h>
  #include <sys/types.h>
-@@ -1704,6 +1705,316 @@ static void Menu_quit(void) {
+@@ -1255,6 +1256,7 @@ static Array* getEntries(char* path){
+ 
+ static void queueNext(char* cmd) {
+ 	LOG_info("cmd: %s\n", cmd);
++	GFX_showLoading();
+ 	putFile("/tmp/next", cmd);
+ 	quit = 1;
+ }
+@@ -1704,6 +1706,316 @@ static void Menu_quit(void) {
  
  ///////////////////////////////////////
  
@@ -1061,7 +1303,7 @@ index 6fcba42..dc103cb 100644
  int main (int argc, char *argv[]) {
  	selected_modifier = 0;	
  	if (autoResume()) return 0; // nothing to do	
-@@ -1825,7 +2136,22 @@ int main (int argc, char *argv[]) {
+@@ -1825,7 +2137,22 @@ int main (int argc, char *argv[]) {
  				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
  			}
  			else if (total>0) {
@@ -1085,7 +1327,7 @@ index 6fcba42..dc103cb 100644
  					itemnotchanged = 0;
  					if (selected==0 && !PAD_justPressed(BTN_UP)) {
  						// stop at top
-@@ -1910,7 +2236,8 @@ int main (int argc, char *argv[]) {
+@@ -1910,7 +2237,8 @@ int main (int argc, char *argv[]) {
  					}
  					myentry = NULL;
  				}
@@ -1095,7 +1337,7 @@ index 6fcba42..dc103cb 100644
  					itemnotchanged = 0;
  					selected -= ( MAIN_ROW_COUNT + fancy_mode );
  					if (selected<0) {
-@@ -2068,6 +2395,7 @@ int main (int argc, char *argv[]) {
+@@ -2068,6 +2396,7 @@ int main (int argc, char *argv[]) {
  		
  		if (dirty) {
  			GFX_clear(screen);
@@ -1103,7 +1345,7 @@ index 6fcba42..dc103cb 100644
  			
  			int ox;
  			int oy;
-@@ -2145,7 +2473,10 @@ int main (int argc, char *argv[]) {
+@@ -2145,7 +2474,10 @@ int main (int argc, char *argv[]) {
  			}
  			else {
  				// list
