@@ -281,7 +281,7 @@ index 0000000..76f38c0
 +ToggleHideState => Скрыть превью сохранения
 +ToggleHideBOXARTifState => Скрыть обложку при сохранении
 diff --git a/workspace/all/common/api.c b/workspace/all/common/api.c
-index d0b0bfd..8f40587 100644
+index d0b0bfd..2529a56 100644
 --- a/workspace/all/common/api.c
 +++ b/workspace/all/common/api.c
 @@ -17,6 +17,7 @@
@@ -318,6 +318,27 @@ index d0b0bfd..8f40587 100644
  		TTF_SizeUTF8(font, out_name, &text_width, NULL);
  		text_width += padding;
  	}
+@@ -2362,6 +2372,8 @@ void PWR_powerOff(void) {
+ 	}
+ }
+ 
++#include "standby_impl.h"
++
+ static void PWR_enterSleep(void) {
+ 	SDL_PauseAudio(1);
+ 	if (GetHDMI()) {
+@@ -2405,6 +2417,11 @@ static void PWR_waitForWake(void) {
+ void PWR_fauxSleep(void) {
+ 	GFX_clear(gfx.screen);
+ 	PAD_reset();
++	if (Standby_show()) { // woken while the clock screen was on: no real sleep needed
++		PAD_reset();
++		return;
++	}
++	GFX_clear(gfx.screen);
+ 	PWR_enterSleep();
+ 	PWR_waitForWake();
+ 	PWR_exitSleep();
 diff --git a/workspace/all/common/api.h b/workspace/all/common/api.h
 index 9b7bb4b..663c908 100644
 --- a/workspace/all/common/api.h
@@ -520,6 +541,162 @@ index 0000000..04b23d3
 +	if (i18n.logging && I18N_hasLetters(text)) I18N_logMiss(text);
 +	return text;
 +}
+diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
+new file mode 100644
+index 0000000..b422b22
+--- /dev/null
++++ b/workspace/all/common/standby_impl.h
+@@ -0,0 +1,150 @@
++// Standby screen (clock + animation) shown before the real sleep.
++// Included from api.c.
++//  - Disable:  create empty file  .userdata/shared/disable-standby
++//  - Own animation: PNG frames  .system/res/standby/0.png, 1.png, 2.png ...  (up to 60)
++//    optional  .system/res/standby/delay.txt  with delay between frames in ms (default 100)
++#include <time.h>
++
++#define STANDBY_DISABLE_PATH SHARED_USERDATA_PATH "/disable-standby"
++#define STANDBY_DIR RES_PATH "/standby"
++#define STANDBY_MAX_FRAMES 60
++#define STANDBY_SECONDS 20 // when not charging; while charging it stays on
++
++static void SB_circle(SDL_Surface* d, int cx, int cy, int r, Uint32 c) {
++	for (int dy=-r; dy<=r; dy++) {
++		int w = (int)sqrtf((float)(r*r - dy*dy));
++		SDL_FillRect(d, &(SDL_Rect){cx-w, cy+dy, w*2+1, 1}, c);
++	}
++}
++
++// gradient background with slowly drifting coloured blobs (no files needed)
++static void SB_drawBackground(SDL_Surface* d, unsigned ms) {
++	int W = d->w, H = d->h;
++	for (int y=0; y<H; y++) {
++		int r = 11 + (22-11)*y/H;
++		int g = 16 + (28-16)*y/H;
++		int b = 40 + (70-40)*y/H;
++		SDL_FillRect(d, &(SDL_Rect){0,y,W,1}, SDL_MapRGB(d->format, r, g, b));
++	}
++	static const unsigned char col[5][3] = {
++		{0x4B,0x6E,0x16}, {0x45,0x28,0x84}, {0x7A,0x2A,0x52}, {0x0B,0x6B,0x7A}, {0x8A,0x4A,0x12}
++	};
++	float t = ms / 1000.0f;
++	for (int i=0; i<5; i++) {
++		float fx = 0.23f + 0.07f*i, fy = 0.19f + 0.05f*i;
++		int cx = W/2 + (int)(W*0.38f*sinf(t*fx + i*1.7f));
++		int cy = H/2 + (int)(H*0.34f*cosf(t*fy + i*2.3f));
++		int r = H/6 + (int)(H/30*sinf(t*0.9f + i));
++		SB_circle(d, cx, cy, r, SDL_MapRGB(d->format, col[i][0], col[i][1], col[i][2]));
++	}
++}
++
++static SDL_Surface* SB_text(TTF_Font* f, const char* s, SDL_Color c) {
++	return (TTF_RenderUTF8_Blended)(f, s, c); // parentheses: skip the translation macro
++}
++
++static void SB_blitCentered(SDL_Surface* d, TTF_Font* f, const char* s, int y, SDL_Color c) {
++	int sh = f==NULL ? 0 : 2*FIXED_SCALE/2;
++	SDL_Surface* t = SB_text(f, s, (SDL_Color){0,0,0});
++	if (t) { SDL_BlitSurface(t, NULL, d, &(SDL_Rect){(d->w-t->w)/2+sh+1, y+sh+1}); SDL_FreeSurface(t); }
++	t = SB_text(f, s, c);
++	if (t) { SDL_BlitSurface(t, NULL, d, &(SDL_Rect){(d->w-t->w)/2, y}); SDL_FreeSurface(t); }
++}
++
++static int SB_loadFrames(SDL_Surface** frames) {
++	int n = 0;
++	char path[256];
++	while (n<STANDBY_MAX_FRAMES) {
++		snprintf(path, sizeof(path), STANDBY_DIR "/%d.png", n);
++		if (access(path, F_OK)!=0) break;
++		SDL_Surface* s = IMG_Load(path);
++		if (!s) break;
++		SDL_Surface* c = SDL_ConvertSurface(s, gfx.screen->format, 0);
++		SDL_FreeSurface(s);
++		if (!c) break;
++		frames[n++] = c;
++	}
++	return n;
++}
++
++static void SB_blitFrame(SDL_Surface* d, SDL_Surface* f) {
++	// "cover": fill the screen keeping the aspect ratio, crop the rest
++	SDL_Rect src = {0,0,f->w,f->h};
++	if ((long)f->w*d->h > (long)f->h*d->w) { // frame is wider
++		src.w = (int)((long)f->h*d->w/d->h);
++		src.x = (f->w-src.w)/2;
++	} else {
++		src.h = (int)((long)f->w*d->h/d->w);
++		src.y = (f->h-src.h)/2;
++	}
++	SDL_BlitScaled(f, &src, d, &(SDL_Rect){0,0,d->w,d->h});
++}
++
++// returns 1 if the user woke the device while the clock was shown, 0 if time ran out
++static int Standby_show(void) {
++	if (GetHDMI() || exists(STANDBY_DISABLE_PATH)) return 0;
++
++	SDL_Surface* screen = gfx.screen;
++	SDL_PauseAudio(1);
++
++	TTF_Font* big = TTF_OpenFont(FONT_PATH, SCALE1(44));
++	if (!big) big = font.large;
++
++	SDL_Surface* frames[STANDBY_MAX_FRAMES];
++	int nframes = SB_loadFrames(frames);
++	int delay = 100;
++	{
++		FILE* f = fopen(STANDBY_DIR "/delay.txt", "r");
++		if (f) { int v = 0; if (fscanf(f, "%d", &v)==1 && v>=20 && v<=2000) delay = v; fclose(f); }
++	}
++
++	static const char* wd[] = {"воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"};
++	static const char* mo[] = {"января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"};
++
++	while (SDL_PollEvent(&(SDL_Event){0})) {} // drop old events
++	uint32_t start = SDL_GetTicks();
++	uint32_t checked = start;
++	int charging = pwr.is_charging;
++	int woke = 0;
++
++	while (1) {
++		SDL_Event ev;
++		while (SDL_PollEvent(&ev)) {
++			if (ev.type==SDL_KEYDOWN || ev.type==SDL_JOYBUTTONDOWN) woke = 1;
++		}
++		if (woke) break;
++
++		uint32_t now = SDL_GetTicks();
++		if (now-checked>=2000) {
++			int ch = 0, lvl = 0;
++			PLAT_getBatteryStatus(&ch, &lvl);
++			charging = ch;
++			checked = now;
++		}
++		if (!charging && now-start>=STANDBY_SECONDS*1000) break;
++
++		if (nframes>0) SB_blitFrame(screen, frames[((now-start)/delay) % nframes]);
++		else SB_drawBackground(screen, now-start);
++
++		time_t tt = time(NULL);
++		struct tm* lt = localtime(&tt);
++		char buf[64];
++		if (lt) {
++			snprintf(buf, sizeof(buf), "%02d:%02d", lt->tm_hour, lt->tm_min);
++			SB_blitCentered(screen, big, buf, screen->h*30/100, (SDL_Color){255,255,255});
++			snprintf(buf, sizeof(buf), "%s, %d %s", wd[lt->tm_wday%7], lt->tm_mday, mo[lt->tm_mon%12]);
++			SB_blitCentered(screen, font.large, buf, screen->h*30/100 + SCALE1(54), (SDL_Color){0xE5,0xE7,0xEB});
++		}
++		if (charging) SB_blitCentered(screen, font.small, "Заряжается", screen->h - SCALE1(34), (SDL_Color){0xA3,0xE6,0x35});
++
++		GFX_flip(screen);
++		GFX_pan();
++		SDL_Delay(50);
++	}
++
++	for (int i=0; i<nframes; i++) SDL_FreeSurface(frames[i]);
++	if (big!=font.large) TTF_CloseFont(big);
++	if (woke) SDL_PauseAudio(0);
++	return woke;
++}
++
 diff --git a/workspace/all/minarch/minarch.c b/workspace/all/minarch/minarch.c
 index 997b0af..a466f2e 100644
 --- a/workspace/all/minarch/minarch.c
