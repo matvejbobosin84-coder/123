@@ -608,7 +608,7 @@ index 0000000..04b23d3
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..86b4796
+index 0000000..595e206
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
 @@ -0,0 +1,223 @@
@@ -817,10 +817,10 @@ index 0000000..86b4796
 +	GFX_flip(screen);
 +	GFX_pan();
 +
-+	// keep the logo visible for a moment (file .userdata/shared/loading-ms: milliseconds, 0 = no pause)
++	// keep the logo visible for a moment (files .userdata/shared/loading-ms when launching a game and startup-ms at power on: milliseconds, 0 = no pause)
 +	int ms = hold<0 ? 1200 : hold;
-+	FILE* f = hold<0 ? fopen(SHARED_USERDATA_PATH "/loading-ms", "r") : NULL;
-+	if (!f && hold<0) f = fopen(SHARED_USERDATA_PATH "/loading-ms.txt", "r");
++	FILE* f = fopen(hold<0 ? SHARED_USERDATA_PATH "/loading-ms" : SHARED_USERDATA_PATH "/startup-ms", "r");
++	if (!f) f = fopen(hold<0 ? SHARED_USERDATA_PATH "/loading-ms.txt" : SHARED_USERDATA_PATH "/startup-ms.txt", "r");
 +	if (f) {
 +		char buf[32] = {0};
 +		size_t n = fread(buf, 1, sizeof(buf)-1, f);
@@ -834,7 +834,7 @@ index 0000000..86b4796
 +}
 +
 +void GFX_showLoading(void) { Logo_show(-1); } // when launching a game
-+void GFX_showStartup(void) { Logo_show(0); }  // right after the menu program starts
++void GFX_showStartup(void) { Logo_show(2000); }  // right after the menu program starts
 diff --git a/workspace/all/common/uihelp_impl.h b/workspace/all/common/uihelp_impl.h
 new file mode 100644
 index 0000000..a34d22d
