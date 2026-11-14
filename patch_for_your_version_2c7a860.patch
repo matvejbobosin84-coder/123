@@ -543,21 +543,23 @@ index 0000000..04b23d3
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..b422b22
+index 0000000..375df7c
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
-@@ -0,0 +1,150 @@
+@@ -0,0 +1,157 @@
 +// Standby screen (clock + animation) shown before the real sleep.
 +// Included from api.c.
 +//  - Disable:  create empty file  .userdata/shared/disable-standby
-+//  - Own animation: PNG frames  .system/res/standby/0.png, 1.png, 2.png ...  (up to 60)
++//  - Own animation: PNG frames  .system/res/standby/0.png, 1.png, 2.png ...  (up to 150)
 +//    optional  .system/res/standby/delay.txt  with delay between frames in ms (default 100)
++//  - Time on screen (not charging): file .userdata/shared/standby-seconds with a number of seconds (default 90)
 +#include <time.h>
 +
 +#define STANDBY_DISABLE_PATH SHARED_USERDATA_PATH "/disable-standby"
 +#define STANDBY_DIR RES_PATH "/standby"
-+#define STANDBY_MAX_FRAMES 60
-+#define STANDBY_SECONDS 20 // when not charging; while charging it stays on
++#define STANDBY_MAX_FRAMES 150
++#define STANDBY_SECONDS 90 // default when not charging; while charging it stays on
++#define STANDBY_SECONDS_PATH SHARED_USERDATA_PATH "/standby-seconds" // optional: file with a number
 +
 +static void SB_circle(SDL_Surface* d, int cx, int cy, int r, Uint32 c) {
 +	for (int dy=-r; dy<=r; dy++) {
@@ -650,6 +652,11 @@ index 0000000..b422b22
 +	static const char* wd[] = {"воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"};
 +	static const char* mo[] = {"января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"};
 +
++	int seconds = STANDBY_SECONDS;
++	{
++		FILE* f = fopen(STANDBY_SECONDS_PATH, "r");
++		if (f) { int v = 0; if (fscanf(f, "%d", &v)==1 && v>=5 && v<=3600) seconds = v; fclose(f); }
++	}
 +	while (SDL_PollEvent(&(SDL_Event){0})) {} // drop old events
 +	uint32_t start = SDL_GetTicks();
 +	uint32_t checked = start;
@@ -670,7 +677,7 @@ index 0000000..b422b22
 +			charging = ch;
 +			checked = now;
 +		}
-+		if (!charging && now-start>=STANDBY_SECONDS*1000) break;
++		if (!charging && now-start>=(uint32_t)seconds*1000) break;
 +
 +		if (nframes>0) SB_blitFrame(screen, frames[((now-start)/delay) % nframes]);
 +		else SB_drawBackground(screen, now-start);
@@ -688,7 +695,7 @@ index 0000000..b422b22
 +
 +		GFX_flip(screen);
 +		GFX_pan();
-+		SDL_Delay(50);
++		SDL_Delay(16);
 +	}
 +
 +	for (int i=0; i<nframes; i++) SDL_FreeSurface(frames[i]);
