@@ -396,7 +396,7 @@ index d0b0bfd..2fd45be 100644
  	PWR_waitForWake();
  	PWR_exitSleep();
 diff --git a/workspace/all/common/api.h b/workspace/all/common/api.h
-index 9b7bb4b..c125ec8 100644
+index 9b7bb4b..68376e5 100644
 --- a/workspace/all/common/api.h
 +++ b/workspace/all/common/api.h
 @@ -3,6 +3,7 @@
@@ -407,10 +407,13 @@ index 9b7bb4b..c125ec8 100644
  
  ///////////////////////////////
  
-@@ -305,6 +306,8 @@ void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* ds
+@@ -305,6 +306,11 @@ void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* ds
  void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
  void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
  void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
++void GFX_fillRound(SDL_Surface* dst, int x, int y, int w, int h, int r, Uint32 c);
++void GFX_drawBackdrop(SDL_Surface* dst); // dark blue gradient
++void GFX_consoleColor(const char* name, int* r, int* g, int* b, int* dark_text);
 +void GFX_showStartup(void); // logo screen at program start
 +void GFX_showLoading(void); // LOADING screen while a game starts
  int GFX_getButtonWidth(char* hint, char* button);
@@ -608,10 +611,10 @@ index 0000000..04b23d3
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..595e206
+index 0000000..658e807
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,240 @@
 +// Standby screen (clock + animation) shown before the real sleep.
 +// Included from api.c.
 +//  - Disable:  create empty file  .userdata/shared/disable-standby
@@ -835,6 +838,23 @@ index 0000000..595e206
 +
 +void GFX_showLoading(void) { Logo_show(-1); } // when launching a game
 +void GFX_showStartup(void) { Logo_show(2000); }  // right after the menu program starts
++
++// ---- helpers shared with minui / minarch ----
++void GFX_fillRound(SDL_Surface* dst, int x, int y, int w, int h, int r, Uint32 c) { UI_fillRound(dst, x, y, w, h, r, c); }
++void GFX_drawBackdrop(SDL_Surface* dst) { SB_gradient(dst); }
++
++// bright colour for a console name (same rule as the tiles of the main menu)
++void GFX_consoleColor(const char* name, int* r, int* g, int* b, int* dark_text) {
++	static const unsigned char palette[8][3] = {
++		{0xA3,0xE6,0x35}, {0x7C,0x3A,0xED}, {0x4F,0x46,0xE5}, {0xDC,0x26,0x26},
++		{0x06,0xB6,0xD4}, {0xF9,0x73,0x16}, {0xEC,0x48,0x99}, {0x10,0xB9,0x81},
++	};
++	unsigned h = 2166136261u;
++	for (const char* p=name; *p; p++) { h ^= (unsigned char)*p; h *= 16777619u; }
++	const unsigned char* c = palette[h % 8];
++	*r=c[0]; *g=c[1]; *b=c[2];
++	*dark_text = (c[0]*299 + c[1]*587 + c[2]*114) > 140000;
++}
 diff --git a/workspace/all/common/uihelp_impl.h b/workspace/all/common/uihelp_impl.h
 new file mode 100644
 index 0000000..a34d22d
@@ -929,7 +949,7 @@ index 0000000..a34d22d
 +	}
 +}
 diff --git a/workspace/all/minarch/minarch.c b/workspace/all/minarch/minarch.c
-index 997b0af..a466f2e 100644
+index 997b0af..5103e2e 100644
 --- a/workspace/all/minarch/minarch.c
 +++ b/workspace/all/minarch/minarch.c
 @@ -1836,9 +1836,10 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
@@ -958,6 +978,326 @@ index 997b0af..a466f2e 100644
  				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
  			}
  
+@@ -5446,6 +5448,166 @@ static int getAlias(char* path, char* alias) {
+ 	return 0;
+ }
+ 
++
++// ---------------------------------------------------------------
++// Pause menu, tile style (dark blue background, bright rows)
++// ---------------------------------------------------------------
++static void Menu_consoleName(char* out, int size) {
++	// folder name of the rom without "(TAG)" and sorting prefix, same name as the tile in the main menu
++	out[0] = '\0';
++	char dir[256];
++	strncpy(dir, game.path, sizeof(dir)-1);
++	dir[sizeof(dir)-1] = '\0';
++	char* slash = strrchr(dir, '/');
++	if (!slash) return;
++	*slash = '\0';
++	char* name = strrchr(dir, '/');
++	name = name ? name+1 : dir;
++	// sorting prefix like "01) "
++	char* p = name;
++	while (*p>='0' && *p<='9') p++;
++	if (p!=name && p[0]==')' ) { p++; while (*p==' ') p++; name = p; }
++	strncpy(out, name, size-1);
++	out[size-1] = '\0';
++	char* par = strrchr(out, '(');
++	if (par && par!=out) { *par = '\0'; }
++	int n = (int)strlen(out);
++	while (n>0 && out[n-1]==' ') out[--n] = '\0';
++}
++
++static void Menu_drawPause(SDL_Surface* screen, SDL_Surface* backing, const char* rom_name, int selected, int show_setting, const char* disc_name) {
++	int s = MIN(screen->w/320, screen->h/240);
++	if (s<1) s = 1;
++	int W = screen->w, H = screen->h;
++	int M = SCALE1(PADDING);
++
++	GFX_clear(screen);
++	GFX_drawBackdrop(screen);
++
++	char cname[128];
++	Menu_consoleName(cname, sizeof(cname));
++	int cr, cg, cb, dark;
++	GFX_consoleColor(cname[0] ? cname : core.tag, &cr, &cg, &cb, &dark);
++	Uint32 accent = SDL_MapRGB(screen->format, cr, cg, cb);
++	SDL_Color on_accent = dark ? (SDL_Color){0x0B,0x10,0x20} : (SDL_Color){0xFF,0xFF,0xFF};
++
++	// ----- header: console badge + game title + battery
++	int ow = GFX_blitHardwareGroup(screen, show_setting, 0);
++	int badge_h = SCALE1(PILL_SIZE) - SCALE1(4);
++	int hy = M + SCALE1(2);
++	SDL_Surface* tag = (TTF_RenderUTF8_Blended)(font.medium, core.tag, on_accent);
++	int badge_w = tag ? tag->w + SCALE1(14) : SCALE1(30);
++	GFX_fillRound(screen, M, hy, badge_w, badge_h, SCALE1(7), accent);
++	if (tag) {
++		SDL_BlitSurface(tag, NULL, screen, &(SDL_Rect){M + (badge_w - tag->w)/2, hy + (badge_h - tag->h)/2});
++		SDL_FreeSurface(tag);
++	}
++	int title_x = M + badge_w + SCALE1(8);
++	int title_max = W - M - ow - title_x - SCALE1(8);
++	char shown[256];
++	GFX_truncateText(font.large, rom_name, shown, title_max, 0);
++	SDL_Surface* title = (TTF_RenderUTF8_Blended)(font.large, shown, COLOR_WHITE);
++	if (title) {
++		SDL_BlitSurface(title, NULL, screen, &(SDL_Rect){title_x, hy + (badge_h - title->h)/2});
++		SDL_FreeSurface(title);
++	}
++
++	// ----- rows
++	int top = M + SCALE1(PILL_SIZE) + SCALE1(8);
++	int row_h = 26*s, row_gap = 3*s;
++	int col_w = 150*s;
++	for (int i=0; i<MENU_ITEM_COUNT; i++) {
++		int ry = top + i*(row_h+row_gap);
++		SDL_Color tc = COLOR_WHITE;
++		if (i==selected) {
++			Uint32 fill = accent;
++			tc = on_accent;
++			if (i==ITEM_QUIT) { fill = SDL_MapRGB(screen->format, 0xFF,0x8F,0xA3); tc = (SDL_Color){0x0B,0x10,0x20}; }
++			GFX_fillRound(screen, M, ry, col_w, row_h, 8*s, fill);
++		}
++		else if (i==ITEM_QUIT) tc = (SDL_Color){0xFF,0x8F,0xA3};
++		SDL_Surface* t = TTF_RenderUTF8_Blended(font.large, menu.items[i], tc);
++		if (t) {
++			SDL_BlitSurface(t, NULL, screen, &(SDL_Rect){M + 10*s, ry + (row_h - t->h)/2});
++			SDL_FreeSurface(t);
++		}
++		if (i==selected && i==ITEM_CONT && menu.total_discs>1) {
++			SDL_Surface* d = (TTF_RenderUTF8_Blended)(font.small, disc_name, tc);
++			if (d) {
++				SDL_BlitSurface(d, NULL, screen, &(SDL_Rect){M + col_w - 8*s - d->w, ry + (row_h - d->h)/2});
++				SDL_FreeSurface(d);
++			}
++		}
++	}
++
++	// ----- right side: slot preview (save/load) or the paused game
++	int px = M + col_w + 10*s;
++	int pw = W - M - px;
++	int label_h = 16*s;
++	int fy = top + label_h;
++	int fh = pw * 3 / 4;
++	int bd = 2*s; // frame thickness
++	int is_slot = (selected==ITEM_SAVE || selected==ITEM_LOAD);
++
++	char label[64];
++	if (is_slot) {
++		if (menu.slot==0) snprintf(label, sizeof(label), "Автосохранение");
++		else snprintf(label, sizeof(label), "Слот %d", menu.slot);
++	}
++	else snprintf(label, sizeof(label), "Игра");
++	SDL_Surface* lt = (TTF_RenderUTF8_Blended)(font.large, label, COLOR_WHITE);
++	if (lt) { SDL_BlitSurface(lt, NULL, screen, &(SDL_Rect){px, top + (label_h - lt->h)/2}); SDL_FreeSurface(lt); }
++
++	GFX_fillRound(screen, px, fy, pw, fh, 8*s, accent);
++	int ix = px + bd, iy = fy + bd, iw = pw - bd*2, ih = fh - bd*2;
++	GFX_fillRound(screen, ix, iy, iw, ih, 6*s, SDL_MapRGB(screen->format, 0x0B,0x10,0x20));
++	ix += 2*s; iy += 2*s; iw -= 4*s; ih -= 4*s;
++
++	if (!is_slot) {
++		SDL_BlitScaled(backing, NULL, screen, &(SDL_Rect){ix, iy, iw, ih});
++	}
++	else {
++		SDL_Rect pr = {ix, iy, iw, ih};
++		if (menu.preview_exists) {
++			SDL_Surface* bmp = IMG_Load(menu.bmp_path);
++			if (!bmp) {
++				GFX_blitMessage(font.large, "No Preview", screen, &pr);
++			} else {
++				SDL_Surface* pv = zoomSurface(bmp, (1.0 * iw / bmp->w), (1.0 * ih / bmp->h), 0);
++				if (pv) { SDL_BlitSurface(pv, NULL, screen, &(SDL_Rect){ix, iy}); SDL_FreeSurface(pv); }
++				SDL_FreeSurface(bmp);
++			}
++		}
++		else {
++			if (menu.save_exists) GFX_blitMessage(font.large, "No Preview", screen, &pr);
++			else GFX_blitMessage(font.large, "Empty Slot", screen, &pr);
++		}
++
++		// slot dots
++		int dot = 4*s, gap = 4*s, act_w = 12*s;
++		int total_w = (MENU_SLOT_COUNT-1)*(dot+gap) + act_w + (MENU_SLOT_COUNT>0 ? (dot+gap) : 0);
++		int dx = px + (pw - total_w)/2;
++		int dy = fy + fh + 6*s;
++		// dot 0 = auto slot (red), then 1..MENU_SLOT_COUNT
++		for (int k=0; k<=MENU_SLOT_COUNT; k++) {
++			int cur = (k==menu.slot);
++			int ww = cur ? act_w : dot;
++			Uint32 col = cur ? SDL_MapRGB(screen->format, 255,255,255)
++			                 : (k==0 ? SDL_MapRGB(screen->format, 0xF8,0x71,0x71) : SDL_MapRGB(screen->format, 0x5B,0x60,0x94));
++			GFX_fillRound(screen, dx, dy, ww, dot, dot/2, col);
++			dx += ww + gap;
++		}
++	}
++
++	// ----- hints
++	if (show_setting && !GetHDMI()) {
++		GFX_blitHardwareHints(screen, show_setting, 0);
++	} else {
++		GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"PWR":"MENU",pwractionstr, "Y","BOXART", NULL }, 0, screen, 0, 0);
++	}
++	GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1, 0);
++}
++
+ static void Menu_loop(void) {
+ 
+ 	LOG_info("Entering Menu render= %i - rendering= %i\n",render,rendering);fflush(stdout);
+@@ -5644,151 +5806,8 @@ static void Menu_loop(void) {
+ 		PWR_update(&dirty, &show_setting, Menu_beforeSleep, Menu_afterSleep);
+ 		
+ 		if (dirty) {
+-			GFX_clear(screen);
+-			
+-			SDL_BlitSurface(backing, NULL, screen, NULL);
+-			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
++			Menu_drawPause(screen, backing, rom_name, selected, show_setting, disc_name);
+ 
+-			int ox, oy;
+-			int ow = GFX_blitHardwareGroup(screen, show_setting, fancy_mode);
+-			int max_width = screen->w - SCALE1((PADDING - (PADDING*fancy_mode)) * 2) - ow;
+-			
+-			char display_name[256];
+-			int text_width = GFX_truncateText(font.large, rom_name, display_name, max_width, SCALE1(BUTTON_PADDING*2));
+-			max_width = MIN(max_width, text_width);
+-
+-			SDL_Surface* text;
+-			text = TTF_RenderUTF8_Blended(font.large, display_name, COLOR_WHITE);
+-			GFX_blitPill(ASSET_BLACK_PILL, screen, &(SDL_Rect){
+-				SCALE1((PADDING - (PADDING*fancy_mode))),
+-				SCALE1((PADDING - (PADDING*fancy_mode))),
+-				max_width,
+-				SCALE1(PILL_SIZE)
+-			});
+-			SDL_BlitSurface(text, &(SDL_Rect){
+-				0,
+-				0,
+-				max_width-SCALE1(BUTTON_PADDING*2),
+-				text->h
+-			}, screen, &(SDL_Rect){
+-				SCALE1((PADDING - (PADDING*fancy_mode))+BUTTON_PADDING),
+-				SCALE1((PADDING - (PADDING*fancy_mode))+4)
+-			});
+-			SDL_FreeSurface(text);
+-			if (show_setting && !GetHDMI()) {
+-				 GFX_blitHardwareHints(screen, show_setting, fancy_mode);
+-			} else {
+-				GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"PWR":"MENU",pwractionstr, "Y","BOXART", NULL }, 0, screen, 0, fancy_mode);
+-			}
+-			
+-			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1, fancy_mode);
+-			
+-			// list
+-			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - ((PADDING - (PADDING*fancy_mode))* 2)) - (MENU_ITEM_COUNT * PILL_SIZE)) / 2;
+-			for (int i=0; i<MENU_ITEM_COUNT; i++) {
+-				char* item = menu.items[i];
+-				SDL_Color text_color = COLOR_WHITE;
+-				
+-				if (i==selected) {
+-					// disc change
+-					if (menu.total_discs>1 && i==ITEM_CONT) {				
+-						GFX_blitPill(ASSET_DARK_GRAY_PILL, screen, &(SDL_Rect){
+-							SCALE1((PADDING - (PADDING*fancy_mode))),
+-							SCALE1(oy + (PADDING - (PADDING*fancy_mode))),
+-							screen->w - SCALE1((PADDING - (PADDING*fancy_mode)) * 2),
+-							SCALE1(PILL_SIZE)
+-						});
+-						text = TTF_RenderUTF8_Blended(font.large, disc_name, COLOR_WHITE);
+-						SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+-							screen->w - SCALE1((PADDING - (PADDING*fancy_mode)) + BUTTON_PADDING) - text->w,
+-							SCALE1(oy + (PADDING - (PADDING*fancy_mode)) + 4)
+-						});
+-						SDL_FreeSurface(text);
+-					}
+-					
+-					TTF_SizeUTF8(font.large, item, &ow, NULL);
+-					ow += SCALE1(BUTTON_PADDING*2);
+-					
+-					// pill
+-					GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
+-						SCALE1((PADDING - (PADDING*fancy_mode))),
+-						SCALE1(oy + (PADDING - (PADDING*fancy_mode)) + (i * PILL_SIZE)),
+-						ow,
+-						SCALE1(PILL_SIZE)
+-					});
+-					text_color = COLOR_BLACK;
+-				}
+-				else {
+-					// shadow
+-					text = TTF_RenderUTF8_Blended(font.large, item, COLOR_BLACK);
+-					SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+-						SCALE1(2 + (PADDING - (PADDING*fancy_mode)) + BUTTON_PADDING),
+-						SCALE1(1 + (PADDING - (PADDING*fancy_mode)) + oy + (i * PILL_SIZE) + 4)
+-					});
+-					SDL_FreeSurface(text);
+-				}
+-				
+-				// text
+-				text = TTF_RenderUTF8_Blended(font.large, item, text_color);
+-				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
+-					SCALE1((PADDING - (PADDING*fancy_mode)) + BUTTON_PADDING),
+-					SCALE1(oy + (PADDING - (PADDING*fancy_mode)) + (i * PILL_SIZE) + 4)
+-				});
+-				SDL_FreeSurface(text);
+-			}
+-
+-			// my slot preview enlarged to 384x288 for better see 
+-			if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
+-				#define WINDOW_RADIUS 4 // TODO: this logic belongs in blitRect?
+-				#define PAGINATION_HEIGHT 6
+-				// unscaled
+-				int hw = DEVICE_WIDTH * 3 / 5;
+-				int hh = DEVICE_HEIGHT * 3 / 5;
+-				int pw = hw + SCALE1(WINDOW_RADIUS*2);
+-				int ph = hh + SCALE1(WINDOW_RADIUS*2 + PAGINATION_HEIGHT);
+-				ox = DEVICE_WIDTH - pw;
+-				oy = (DEVICE_HEIGHT - ph) / 2;
+-							
+-				// window
+-				GFX_blitRect(ASSET_STATE_BG, screen, &(SDL_Rect){ox,oy,pw,ph});
+-				ox += SCALE1(WINDOW_RADIUS);
+-				oy += SCALE1(WINDOW_RADIUS);
+-				
+-				if (menu.preview_exists) { // has save, has preview
+-					// lotta memory churn here
+-					SDL_Surface* bmp = IMG_Load(menu.bmp_path);
+-					if (!bmp) {
+-						SDL_Rect preview_rect = {ox,oy,hw,hh};
+-						SDL_FillRect(screen, &preview_rect, 0);
+-						GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
+-					} else {
+-						SDL_Surface* preview = zoomSurface(bmp, (1.0 * hw / bmp->w) , (1.0 * hh / bmp->h), 0);					
+-						SDL_BlitSurface(preview, NULL, screen, &(SDL_Rect){ox,oy}); 
+-						if (bmp) SDL_FreeSurface(bmp);   
+-						if (preview) SDL_FreeSurface(preview);					
+-					}
+-					
+-				}
+-				else {
+-					SDL_Rect preview_rect = {ox,oy,hw,hh};
+-					SDL_FillRect(screen, &preview_rect, 0);
+-					if (menu.save_exists) GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
+-					else GFX_blitMessage(font.large, "Empty Slot", screen, &preview_rect);
+-				}
+-				
+-				// pagination
+-				ox += (pw-SCALE1(16*MENU_SLOT_COUNT))/2;
+-				oy += hh+SCALE1(WINDOW_RADIUS)-SCALE1(PAGINATION_HEIGHT / 2 - 1);
+-				for (int i=1; i<MENU_SLOT_COUNT+1; i++) {
+-					if (i==menu.slot)GFX_blitAsset(ASSET_PAGE, NULL, screen, &(SDL_Rect){ox+SCALE1((i-1)*16),oy});
+-					else GFX_blitAsset(ASSET_DOT, NULL, screen, &(SDL_Rect){ox+SCALE1((i-1)*16)+4,oy+SCALE1(2)});
+-				}
+-				if (menu.slot == 0){
+-					ox -= SCALE1(16);		
+-					GFX_blitAsset(ASSET_RED_PAGE, NULL, screen, &(SDL_Rect){ox,oy});
+-				}
+-			}
+-	
+ 			GFX_flip(screen);
+ 			GFX_pan();
+ 			dirty = 0;
 diff --git a/workspace/all/minui/minui.c b/workspace/all/minui/minui.c
 index 6fcba42..8137984 100644
 --- a/workspace/all/minui/minui.c
