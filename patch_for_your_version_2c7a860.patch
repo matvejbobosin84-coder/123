@@ -396,7 +396,7 @@ index d0b0bfd..2fd45be 100644
  	PWR_waitForWake();
  	PWR_exitSleep();
 diff --git a/workspace/all/common/api.h b/workspace/all/common/api.h
-index 9b7bb4b..de84f3e 100644
+index 9b7bb4b..c125ec8 100644
 --- a/workspace/all/common/api.h
 +++ b/workspace/all/common/api.h
 @@ -3,6 +3,7 @@
@@ -407,10 +407,11 @@ index 9b7bb4b..de84f3e 100644
  
  ///////////////////////////////
  
-@@ -305,6 +306,7 @@ void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* ds
+@@ -305,6 +306,8 @@ void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* ds
  void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
  void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
  void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
++void GFX_showStartup(void); // logo screen at program start
 +void GFX_showLoading(void); // LOADING screen while a game starts
  int GFX_getButtonWidth(char* hint, char* button);
  void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rect);
@@ -607,10 +608,10 @@ index 0000000..04b23d3
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..1a47f52
+index 0000000..86b4796
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,223 @@
 +// Standby screen (clock + animation) shown before the real sleep.
 +// Included from api.c.
 +//  - Disable:  create empty file  .userdata/shared/disable-standby
@@ -802,7 +803,7 @@ index 0000000..1a47f52
 +
 +// Logo screen shown while a game / program is starting:
 +// dark blue background + .system/res/loading.png (any PNG; replace it with your own logo)
-+void GFX_showLoading(void) {
++static void Logo_show(int hold) { // hold: -1 = default / file setting, 0 = no pause
 +	SDL_Surface* screen = gfx.screen;
 +	if (!screen) return;
 +
@@ -815,7 +816,25 @@ index 0000000..1a47f52
 +	}
 +	GFX_flip(screen);
 +	GFX_pan();
++
++	// keep the logo visible for a moment (file .userdata/shared/loading-ms: milliseconds, 0 = no pause)
++	int ms = hold<0 ? 1200 : hold;
++	FILE* f = hold<0 ? fopen(SHARED_USERDATA_PATH "/loading-ms", "r") : NULL;
++	if (!f && hold<0) f = fopen(SHARED_USERDATA_PATH "/loading-ms.txt", "r");
++	if (f) {
++		char buf[32] = {0};
++		size_t n = fread(buf, 1, sizeof(buf)-1, f);
++		fclose(f);
++		buf[n] = '\0';
++		char* p = buf;
++		while (*p && (*p<'0' || *p>'9')) p++;
++		if (*p) { int v = atoi(p); if (v>=0 && v<=10000) ms = v; }
++	}
++	if (ms>0) SDL_Delay(ms);
 +}
++
++void GFX_showLoading(void) { Logo_show(-1); } // when launching a game
++void GFX_showStartup(void) { Logo_show(0); }  // right after the menu program starts
 diff --git a/workspace/all/common/uihelp_impl.h b/workspace/all/common/uihelp_impl.h
 new file mode 100644
 index 0000000..a34d22d
@@ -940,7 +959,7 @@ index 997b0af..a466f2e 100644
  			}
  
 diff --git a/workspace/all/minui/minui.c b/workspace/all/minui/minui.c
-index 6fcba42..58ad481 100644
+index 6fcba42..8137984 100644
 --- a/workspace/all/minui/minui.c
 +++ b/workspace/all/minui/minui.c
 @@ -1,4 +1,5 @@
@@ -1274,7 +1293,15 @@ index 6fcba42..58ad481 100644
  int main (int argc, char *argv[]) {
  	selected_modifier = 0;	
  	if (autoResume()) return 0; // nothing to do	
-@@ -1825,7 +2137,22 @@ int main (int argc, char *argv[]) {
+@@ -1751,6 +2063,7 @@ int main (int argc, char *argv[]) {
+ 	InitSettings();
+ 	
+ 	SDL_Surface* screen = GFX_init(MODE_MAIN);
++	GFX_showStartup();
+ 	PAD_init();
+ 	PWR_init();
+ 	if (!HAS_POWER_BUTTON && !simple_mode) PWR_disableSleep();
+@@ -1825,7 +2138,22 @@ int main (int argc, char *argv[]) {
  				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
  			}
  			else if (total>0) {
@@ -1298,7 +1325,7 @@ index 6fcba42..58ad481 100644
  					itemnotchanged = 0;
  					if (selected==0 && !PAD_justPressed(BTN_UP)) {
  						// stop at top
-@@ -1910,7 +2237,8 @@ int main (int argc, char *argv[]) {
+@@ -1910,7 +2238,8 @@ int main (int argc, char *argv[]) {
  					}
  					myentry = NULL;
  				}
@@ -1308,7 +1335,7 @@ index 6fcba42..58ad481 100644
  					itemnotchanged = 0;
  					selected -= ( MAIN_ROW_COUNT + fancy_mode );
  					if (selected<0) {
-@@ -2066,8 +2394,9 @@ int main (int argc, char *argv[]) {
+@@ -2066,8 +2395,9 @@ int main (int argc, char *argv[]) {
  			}
  		}
  		
@@ -1319,7 +1346,7 @@ index 6fcba42..58ad481 100644
  			
  			int ox;
  			int oy;
-@@ -2145,7 +2474,10 @@ int main (int argc, char *argv[]) {
+@@ -2145,7 +2475,10 @@ int main (int argc, char *argv[]) {
  			}
  			else {
  				// list
