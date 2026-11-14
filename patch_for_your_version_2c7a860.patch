@@ -551,10 +551,10 @@ index 997b0af..a466f2e 100644
  			}
  
 diff --git a/workspace/all/minui/minui.c b/workspace/all/minui/minui.c
-index 6fcba42..a26b0c0 100644
+index 6fcba42..26dd5bf 100644
 --- a/workspace/all/minui/minui.c
 +++ b/workspace/all/minui/minui.c
-@@ -1704,6 +1704,196 @@ static void Menu_quit(void) {
+@@ -1704,6 +1704,197 @@ static void Menu_quit(void) {
  
  ///////////////////////////////////////
  
@@ -694,7 +694,8 @@ index 6fcba42..a26b0c0 100644
 +	if (t) { SDL_BlitSurface(t, NULL, screen, &(SDL_Rect){margin, 10*s}); SDL_FreeSurface(t); }
 +	if (pages>0) {
 +		snprintf(title, sizeof(title), "%d / %d", selected+1, total);
-+		SDL_Surface* c = TTF_RenderUTF8_Blended(font.small, title, (SDL_Color){0xB8,0xBC,0xE0});
++		SDL_Color cnt_color = {0xB8,0xBC,0xE0};
++		SDL_Surface* c = TTF_RenderUTF8_Blended(font.small, title, cnt_color);
 +		if (c) { SDL_BlitSurface(c, NULL, screen, &(SDL_Rect){W/2 - c->w/2 + 30*s, 14*s}); SDL_FreeSurface(c); }
 +	}
 +
@@ -751,7 +752,7 @@ index 6fcba42..a26b0c0 100644
  int main (int argc, char *argv[]) {
  	selected_modifier = 0;	
  	if (autoResume()) return 0; // nothing to do	
-@@ -1825,7 +2015,22 @@ int main (int argc, char *argv[]) {
+@@ -1825,7 +2016,22 @@ int main (int argc, char *argv[]) {
  				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
  			}
  			else if (total>0) {
@@ -775,7 +776,7 @@ index 6fcba42..a26b0c0 100644
  					itemnotchanged = 0;
  					if (selected==0 && !PAD_justPressed(BTN_UP)) {
  						// stop at top
-@@ -1910,7 +2115,8 @@ int main (int argc, char *argv[]) {
+@@ -1910,7 +2116,8 @@ int main (int argc, char *argv[]) {
  					}
  					myentry = NULL;
  				}
@@ -785,7 +786,7 @@ index 6fcba42..a26b0c0 100644
  					itemnotchanged = 0;
  					selected -= ( MAIN_ROW_COUNT + fancy_mode );
  					if (selected<0) {
-@@ -2145,7 +2351,10 @@ int main (int argc, char *argv[]) {
+@@ -2145,7 +2352,10 @@ int main (int argc, char *argv[]) {
  			}
  			else {
  				// list
