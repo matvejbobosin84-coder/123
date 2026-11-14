@@ -607,10 +607,10 @@ index 0000000..04b23d3
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..cac9e31
+index 0000000..1a47f52
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,205 @@
 +// Standby screen (clock + animation) shown before the real sleep.
 +// Included from api.c.
 +//  - Disable:  create empty file  .userdata/shared/disable-standby
@@ -749,6 +749,9 @@ index 0000000..cac9e31
 +
 +	while (1) {
 +		uint32_t loop_t0 = SDL_GetTicks();
++		// buttons are read by the platform (evdev), not by SDL events
++		PAD_poll();
++		if (PAD_anyJustPressed()) woke = 1;
 +		SDL_Event ev;
 +		while (SDL_PollEvent(&ev)) {
 +			if (ev.type==SDL_KEYDOWN || ev.type==SDL_JOYBUTTONDOWN) woke = 1;
@@ -937,7 +940,7 @@ index 997b0af..a466f2e 100644
  			}
  
 diff --git a/workspace/all/minui/minui.c b/workspace/all/minui/minui.c
-index 6fcba42..a55503d 100644
+index 6fcba42..58ad481 100644
 --- a/workspace/all/minui/minui.c
 +++ b/workspace/all/minui/minui.c
 @@ -1,4 +1,5 @@
@@ -1305,9 +1308,12 @@ index 6fcba42..a55503d 100644
  					itemnotchanged = 0;
  					selected -= ( MAIN_ROW_COUNT + fancy_mode );
  					if (selected<0) {
-@@ -2068,6 +2396,7 @@ int main (int argc, char *argv[]) {
+@@ -2066,8 +2394,9 @@ int main (int argc, char *argv[]) {
+ 			}
+ 		}
  		
- 		if (dirty) {
+-		if (dirty) {
++		if (dirty && !quit) { // when quitting, keep the logo screen that queueNext() drew
  			GFX_clear(screen);
 +			Tile_background(screen);
  			
