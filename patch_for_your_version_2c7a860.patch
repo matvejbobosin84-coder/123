@@ -401,7 +401,7 @@ index d0b0bfd..2397239 100644
  	PWR_waitForWake();
  	PWR_exitSleep();
 diff --git a/workspace/all/common/api.h b/workspace/all/common/api.h
-index 9b7bb4b..f481dba 100644
+index 9b7bb4b..4b1e32e 100644
 --- a/workspace/all/common/api.h
 +++ b/workspace/all/common/api.h
 @@ -3,6 +3,7 @@
@@ -412,7 +412,7 @@ index 9b7bb4b..f481dba 100644
  
  ///////////////////////////////
  
-@@ -305,6 +306,20 @@ void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* ds
+@@ -305,6 +306,21 @@ void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* ds
  void GFX_blitPill(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
  void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect);
  void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect);
@@ -425,6 +425,7 @@ index 9b7bb4b..f481dba 100644
 +int GFX_drawStatusExtras(SDL_Surface* dst, int x_right, int y, int h, int with_clock);
 +// play time (seconds per game path)
 +int PT_get(const char* path);
++int PT_total(void);
 +void PT_add(const char* path, int secs);
 +void PT_format(int secs, char* out, int n);
 +void GFX_consoleColor(const char* name, int* r, int* g, int* b, int* dark_text);
@@ -625,10 +626,10 @@ index 0000000..04b23d3
 +}
 diff --git a/workspace/all/common/playtime_impl.h b/workspace/all/common/playtime_impl.h
 new file mode 100644
-index 0000000..3eed081
+index 0000000..dea1499
 --- /dev/null
 +++ b/workspace/all/common/playtime_impl.h
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,75 @@
 +// Play time per game. File .userdata/shared/playtime.txt, lines:  seconds<TAB>full path
 +// Included from api.c. Written by minarch, read by minui.
 +#define PT_PATH SHARED_USERDATA_PATH "/playtime.txt"
@@ -693,6 +694,16 @@ index 0000000..3eed081
 +	else if (m<60) snprintf(out, n, "%d мин", m);
 +	else if (m%60==0) snprintf(out, n, "%d ч", m/60);
 +	else snprintf(out, n, "%d ч %d мин", m/60, m%60);
++}
++
++int PT_total(void) {
++	FILE* f = fopen(PT_PATH, "r");
++	if (!f) return 0;
++	char line[600];
++	long sum = 0;
++	while (fgets(line, sizeof(line), f)) sum += atoi(line);
++	fclose(f);
++	return (int)sum;
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
@@ -1836,16 +1847,17 @@ index 997b0af..8d21115 100644
  	QuitSettings();
  	
 diff --git a/workspace/all/minui/minui.c b/workspace/all/minui/minui.c
-index 6fcba42..2434ddb 100644
+index 6fcba42..fe5b8e9 100644
 --- a/workspace/all/minui/minui.c
 +++ b/workspace/all/minui/minui.c
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,6 @@
  #include <stdio.h>
 +#include <math.h>
++#include <sys/statvfs.h>
  #include <stdlib.h>
  #include <msettings.h>
  #include <sys/types.h>
-@@ -120,6 +121,7 @@ typedef struct Entry {
+@@ -120,6 +122,7 @@ typedef struct Entry {
  	char* fullname;
  	char* unique;
  	int type;
@@ -1853,7 +1865,7 @@ index 6fcba42..2434ddb 100644
  	int alpha; // index in parent Directory's alphas Array, which points to the index of an Entry in its entries Array :sweat_smile:
  } Entry;
  
-@@ -134,6 +136,7 @@ static Entry* Entry_new(char* path, int type) {
+@@ -134,6 +137,7 @@ static Entry* Entry_new(char* path, int type) {
  	self->unique = NULL;
  	self->type = type;
  	self->alpha = 0;
@@ -1861,7 +1873,7 @@ index 6fcba42..2434ddb 100644
  	return self;
  }
  static void Entry_free(Entry* self) {
-@@ -1255,6 +1258,7 @@ static Array* getEntries(char* path){
+@@ -1255,6 +1259,7 @@ static Array* getEntries(char* path){
  
  static void queueNext(char* cmd) {
  	LOG_info("cmd: %s\n", cmd);
@@ -1869,7 +1881,7 @@ index 6fcba42..2434ddb 100644
  	putFile("/tmp/next", cmd);
  	quit = 1;
  }
-@@ -1704,6 +1708,365 @@ static void Menu_quit(void) {
+@@ -1704,6 +1709,499 @@ static void Menu_quit(void) {
  
  ///////////////////////////////////////
  
@@ -1995,6 +2007,10 @@ index 6fcba42..2434ddb 100644
 +}
 +
 +static unsigned tile_toast_until = 0;
++static int tile_animating = 0; // set by Tile_draw while the selection animation runs
++static int tile_last_sel = -1, tile_prev_sel = -1;
++static unsigned tile_anim_start = 0;
++#define TILE_ANIM_MS 160
 +static int tile_battery_w = 0; // width of the battery block, set by the main loop
 +
 +static int Tile_count(Entry* e) {
@@ -2155,6 +2171,22 @@ index 6fcba42..2434ddb 100644
 +	}
 +	GFX_drawStatusExtras(screen, W - tile_battery_w - 8*s, 8*s, 24*s, 1);
 +
++	// selection animation: the new tile grows, the old one shrinks back
++	unsigned now_ms = SDL_GetTicks();
++	if (tile_last_sel<0) { tile_anim_start = now_ms - 1000; tile_prev_sel = -1; }
++	else if (selected!=tile_last_sel) {
++		tile_prev_sel = (tile_last_sel/TILE_PER_PAGE==page) ? tile_last_sel : -1;
++		tile_anim_start = now_ms;
++	}
++	tile_last_sel = selected;
++	int gsel = 100;
++	tile_animating = 0;
++	if (now_ms - tile_anim_start < TILE_ANIM_MS) {
++		int p100 = (int)((now_ms - tile_anim_start) * 100 / TILE_ANIM_MS);
++		gsel = p100*p100*(300-2*p100)/10000; // smoothstep
++		tile_animating = 1;
++	}
++
 +	for (int k=0; k<TILE_PER_PAGE; k++) {
 +		int i = first + k;
 +		if (i>=total) break;
@@ -2163,19 +2195,16 @@ index 6fcba42..2434ddb 100644
 +		int x = margin + col*(cell_w+gap);
 +		int y = top_y + row*(cell_h+gap);
 +		int w = cell_w, h = cell_h;
-+		int sel = (i==selected);
++		int g = (i==selected) ? gsel : (i==tile_prev_sel ? 100-gsel : 0);
 +		int cr, cg, cb, dark;
 +		Tile_color(e, &cr, &cg, &cb, &dark);
-+		if (sel) {
-+			// white outline, tile slightly larger
-+			int o = 3*s;
-+			Tile_fillRound(screen, x-o-s, y-o-s, w+(o+s)*2, h+(o+s)*2, radius+o, Tile_pack(screen, 255,255,255));
-+			Tile_fillRound(screen, x-s, y-s, w+s*2, h+s*2, radius+s, Tile_pack(screen, cr,cg,cb));
-+		} else {
-+			// dim non-selected tiles a little so the selected one pops
-+			Tile_fillRound(screen, x, y, w, h, radius, Tile_pack(screen, (cr*70+br_*30)/100, (cg*70+bg_*30)/100, (cb*70+bb_*30)/100));
++		int dr_ = (cr*70+br_*30)/100, dg_ = (cg*70+bg_*30)/100, db_ = (cb*70+bb_*30)/100;
++		int tr = dr_ + (cr-dr_)*g/100, tg = dg_ + (cg-dg_)*g/100, tb = db_ + (cb-db_)*g/100;
++		{
++			int o = 3*s*g/100, ex = s*g/100;
++			if (o>0) Tile_fillRound(screen, x-o-ex, y-o-ex, w+(o+ex)*2, h+(o+ex)*2, radius+o, Tile_pack(screen, 255,255,255));
++			Tile_fillRound(screen, x-ex, y-ex, w+ex*2, h+ex*2, radius+ex, Tile_pack(screen, tr, tg, tb));
 +		}
-+		int tr = sel ? cr : (cr*70+br_*30)/100, tg = sel ? cg : (cg*70+bg_*30)/100, tb = sel ? cb : (cb*70+bb_*30)/100;
 +		SDL_Color tc = dark ? (SDL_Color){0x0B,0x10,0x20} : (SDL_Color){0xFF,0xFF,0xFF};
 +
 +		char* name = e->name;
@@ -2187,19 +2216,35 @@ index 6fcba42..2434ddb 100644
 +		char abbr[16];
 +		Tile_abbrev(name, abbr, sizeof(abbr));
 +		SDL_Surface* big = TTF_RenderUTF8_Blended(tile_big_font, abbr, tc);
-+		if (big) { SDL_BlitSurface(big, NULL, screen, &(SDL_Rect){x+9*s, y+8*s}); SDL_FreeSurface(big); }
++		int abbr_bottom = y + 8*s;
++		if (big) { abbr_bottom += big->h; SDL_BlitSurface(big, NULL, screen, &(SDL_Rect){x+9*s, y+8*s}); SDL_FreeSurface(big); }
 +
++		char shown[256];
++		int name_top = y + h - TTF_FontHeight(font.medium) - 8*s;
++		int reserve = 0; // width taken by the counter when it has to sit on the name row
 +		{
++			// game counter: right under the abbreviation if there is room, otherwise just the number at the right of the name row
 +			int cnt = Tile_count(e);
 +			if (cnt>0) {
 +				char cs[48];
 +				snprintf(cs, sizeof(cs), "%d %s", cnt, Tile_plural(cnt));
 +				SDL_Surface* ct = (TTF_RenderUTF8_Blended)(font.small, cs, tc);
-+				if (ct) { SDL_BlitSurface(ct, NULL, screen, &(SDL_Rect){x+9*s, y+h-ct->h-8*s-TTF_FontHeight(font.medium)-2*s}); SDL_FreeSurface(ct); }
++				if (ct && abbr_bottom + ct->h <= name_top) {
++					SDL_BlitSurface(ct, NULL, screen, &(SDL_Rect){x+9*s, abbr_bottom});
++				}
++				else {
++					if (ct) SDL_FreeSurface(ct);
++					snprintf(cs, sizeof(cs), "%d", cnt);
++					ct = (TTF_RenderUTF8_Blended)(font.small, cs, tc);
++					if (ct) {
++						SDL_BlitSurface(ct, NULL, screen, &(SDL_Rect){x+w-9*s-ct->w, y+h-ct->h-9*s});
++						reserve = ct->w + 6*s;
++					}
++				}
++				if (ct) SDL_FreeSurface(ct);
 +			}
 +		}
-+		char shown[256];
-+		GFX_truncateText(font.medium, name, shown, w-14*s, 0);
++		GFX_truncateText(font.medium, name, shown, w-14*s-reserve, 0);
 +		SDL_Surface* nm = TTF_RenderUTF8_Blended(font.medium, shown, tc);
 +		if (nm) { SDL_BlitSurface(nm, NULL, screen, &(SDL_Rect){x+9*s, y+h-nm->h-8*s}); SDL_FreeSurface(nm); }
 +	}
@@ -2232,10 +2277,111 @@ index 6fcba42..2434ddb 100644
 +	}
 +}
 +
++
++// ---- "About the console" screen (opened with a tap on MENU) ----
++static void About_row(SDL_Surface* screen, int s, int x, int y, int w, int h, const char* label, const char* value, int mr, int mg, int mb) {
++	SDL_Surface* l = (TTF_RenderUTF8_Blended)(font.small, label, (SDL_Color){mr, mg, mb});
++	if (l) { SDL_BlitSurface(l, NULL, screen, &(SDL_Rect){x + 8*s, y + (h - l->h)/2}); SDL_FreeSurface(l); }
++	char shown[160];
++	GFX_truncateText(font.small, value, shown, w/2 + 24*s, 0);
++	SDL_Surface* v = (TTF_RenderUTF8_Blended)(font.small, shown, COLOR_WHITE);
++	if (v) { SDL_BlitSurface(v, NULL, screen, &(SDL_Rect){x + w - v->w - 8*s, y + (h - v->h)/2}); SDL_FreeSurface(v); }
++}
++
++static void About_draw(SDL_Surface* screen, const char* modeStr) {
++	int W = screen->w;
++	int s = W/320; if (s<1) s = 1;
++	int M = 12*s;
++	int mr, mg, mb, pr, pg, pb;
++	GFX_themeColor(1, &mr, &mg, &mb);
++	GFX_themeColor(3, &pr, &pg, &pb);
++
++	SDL_Surface* t = (TTF_RenderUTF8_Blended)(font.large, "О приставке", COLOR_WHITE);
++	if (t) { SDL_BlitSurface(t, NULL, screen, &(SDL_Rect){M, 10*s}); SDL_FreeSurface(t); }
++
++	char vals[10][160];
++	const char* labels[10];
++	int n = 0;
++
++	char* model = PLAT_getModel();
++	labels[n] = "Модель"; snprintf(vals[n], 160, "%s", model ? model : "?"); n++;
++
++	char rel[256]; rel[0] = '\0';
++	getFile(ROOT_SYSTEM_PATH "/version.txt", rel, 256);
++	{
++		char* nl = strchr(rel, '\n');
++		if (nl) *nl = '\0';
++		labels[n] = "Сборка"; snprintf(vals[n], 160, "%s", rel[0] ? rel : "?"); n++;
++	}
++
++	labels[n] = "Батарея";
++	snprintf(vals[n], 160, "%d%%%s", PWR_getBattery(), PWR_isCharging() ? " (заряжается)" : ""); n++;
++
++	{
++		struct statvfs sv;
++		if (statvfs(SDCARD_PATH, &sv)==0) {
++			double fr = (double)sv.f_bavail * sv.f_frsize / 1073741824.0;
++			double to = (double)sv.f_blocks * sv.f_frsize / 1073741824.0;
++			labels[n] = "Карта памяти";
++			snprintf(vals[n], 160, "свободно %.1f из %.1f ГБ", fr, to); n++;
++		}
++	}
++	{
++		FILE* f = fopen("/proc/meminfo", "r");
++		if (f) {
++			char line[128];
++			long total = 0, avail = 0;
++			while (fgets(line, sizeof(line), f)) {
++				if (sscanf(line, "MemTotal: %ld", &total)==1) continue;
++				if (sscanf(line, "MemAvailable: %ld", &avail)==1) continue;
++			}
++			fclose(f);
++			if (total>0) { labels[n] = "Память (RAM)"; snprintf(vals[n], 160, "свободно %ld из %ld МБ", avail/1024, total/1024); n++; }
++		}
++	}
++	{
++		FILE* f = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
++		if (f) {
++			long v = 0;
++			if (fscanf(f, "%ld", &v)==1) {
++				if (v>1000) v /= 1000;
++				labels[n] = "Температура"; snprintf(vals[n], 160, "%ld °C", v); n++;
++			}
++			fclose(f);
++		}
++	}
++	{
++		FILE* f = fopen("/proc/uptime", "r");
++		if (f) {
++			double up = 0;
++			if (fscanf(f, "%lf", &up)==1) {
++				int m = (int)(up/60);
++				labels[n] = "Включена";
++				if (m<60) snprintf(vals[n], 160, "%d мин", m);
++				else snprintf(vals[n], 160, "%d ч %d мин", m/60, m%60);
++				n++;
++			}
++			fclose(f);
++		}
++	}
++	{
++		char pf[48];
++		PT_format(PT_total(), pf, sizeof(pf));
++		labels[n] = "Всего сыграно"; snprintf(vals[n], 160, "%s", pf); n++;
++	}
++	labels[n] = "Режим (вверх/вниз)"; snprintf(vals[n], 160, "%s", modeStr); n++;
++
++	int top_y = 36*s;
++	int row_h = 17*s;
++	int pw = W - M*2;
++	GFX_fillRound(screen, M, top_y - 3*s, pw, row_h*n + 6*s, 8*s, SDL_MapRGB(screen->format, pr, pg, pb));
++	for (int i=0; i<n; i++) About_row(screen, s, M, top_y + i*row_h, pw, row_h, labels[i], vals[i], mr, mg, mb);
++}
++
  int main (int argc, char *argv[]) {
  	selected_modifier = 0;	
  	if (autoResume()) return 0; // nothing to do	
-@@ -1751,6 +2114,7 @@ int main (int argc, char *argv[]) {
+@@ -1751,6 +2249,7 @@ int main (int argc, char *argv[]) {
  	InitSettings();
  	
  	SDL_Surface* screen = GFX_init(MODE_MAIN);
@@ -2243,7 +2389,7 @@ index 6fcba42..2434ddb 100644
  	PAD_init();
  	PWR_init();
  	if (!HAS_POWER_BUTTON && !simple_mode) PWR_disableSleep();
-@@ -1825,7 +2189,22 @@ int main (int argc, char *argv[]) {
+@@ -1825,7 +2324,22 @@ int main (int argc, char *argv[]) {
  				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
  			}
  			else if (total>0) {
@@ -2267,7 +2413,7 @@ index 6fcba42..2434ddb 100644
  					itemnotchanged = 0;
  					if (selected==0 && !PAD_justPressed(BTN_UP)) {
  						// stop at top
-@@ -1910,7 +2289,8 @@ int main (int argc, char *argv[]) {
+@@ -1910,7 +2424,8 @@ int main (int argc, char *argv[]) {
  					}
  					myentry = NULL;
  				}
@@ -2277,7 +2423,7 @@ index 6fcba42..2434ddb 100644
  					itemnotchanged = 0;
  					selected -= ( MAIN_ROW_COUNT + fancy_mode );
  					if (selected<0) {
-@@ -1941,7 +2321,13 @@ int main (int argc, char *argv[]) {
+@@ -1941,7 +2456,13 @@ int main (int argc, char *argv[]) {
  				}
  			}
  		
@@ -2292,11 +2438,12 @@ index 6fcba42..2434ddb 100644
  				itemnotchanged = 0;
  				Entry* entry = top->entries->items[selected];
  				int i = entry->alpha-1;
-@@ -2066,12 +2452,14 @@ int main (int argc, char *argv[]) {
+@@ -2066,76 +2587,18 @@ int main (int argc, char *argv[]) {
  			}
  		}
  		
 -		if (dirty) {
++		if (tile_animating && !show_version && stack->count==1) dirty = 1; // keep redrawing while a tile animation runs
 +		if (dirty && !quit) { // when quitting, keep the logo screen that queueNext() drew
  			GFX_clear(screen);
 +			Tile_background(screen);
@@ -2307,8 +2454,73 @@ index 6fcba42..2434ddb 100644
 +			tile_battery_w = ow;
  
  			if (show_version) {
- 				//if (!version) {
-@@ -2145,7 +2533,10 @@ int main (int argc, char *argv[]) {
+-				//if (!version) {
+-					char release[256];
+-					getFile(ROOT_SYSTEM_PATH "/version.txt", release, 256);
+-					
+-					char *tmp,*commit;
+-					commit = strrchr(release, '\n');
+-					commit[0] = '\0';
+-					commit = strrchr(release, '\n')+1;
+-					tmp = strchr(release, '\n');
+-					tmp[0] = '\0';
+-					
+-					// TODO: not sure if I want bare PLAT_* calls here
+-					char* extra_key = "Model";
+-					char* extra_val = PLAT_getModel(); 
+-					
+-					SDL_Surface* release_txt = TTF_RenderUTF8_Blended(font.large, "Release", COLOR_DARK_TEXT);
+-					SDL_Surface* version_txt = TTF_RenderUTF8_Blended(font.large, release, COLOR_WHITE);
+-					SDL_Surface* commit_txt = TTF_RenderUTF8_Blended(font.large, "Commit", COLOR_DARK_TEXT);
+-					SDL_Surface* hash_txt = TTF_RenderUTF8_Blended(font.large, commit, COLOR_WHITE);
+-					
+-					SDL_Surface* key_txt = TTF_RenderUTF8_Blended(font.large, extra_key, COLOR_DARK_TEXT);
+-					SDL_Surface* val_txt = TTF_RenderUTF8_Blended(font.large, extra_val, COLOR_WHITE);
+-					
+-					int l_width = 0;
+-					int r_width = 0;
+-					
+-					if (release_txt->w>l_width) l_width = release_txt->w;
+-					if (commit_txt->w>l_width) l_width = commit_txt->w;
+-					if (key_txt->w>l_width) l_width = commit_txt->w;
+-
+-					if (version_txt->w>r_width) r_width = version_txt->w;
+-					if (hash_txt->w>r_width) r_width = hash_txt->w;
+-					if (val_txt->w>r_width) r_width = val_txt->w;
+-					
+-					#define VERSION_LINE_HEIGHT 24
+-					int x = l_width + SCALE1(8);
+-					int w = x + r_width;
+-					int h = SCALE1(VERSION_LINE_HEIGHT*4);
+-					version = SDL_CreateRGBSurface(0,w,h,16,0,0,0,0);
+-					
+-					SDL_BlitSurface(release_txt, NULL, version, &(SDL_Rect){0, 0});
+-					SDL_BlitSurface(version_txt, NULL, version, &(SDL_Rect){x,0});
+-					SDL_BlitSurface(commit_txt, NULL, version, &(SDL_Rect){0,SCALE1(VERSION_LINE_HEIGHT)});
+-					SDL_BlitSurface(hash_txt, NULL, version, &(SDL_Rect){x,SCALE1(VERSION_LINE_HEIGHT)});
+-					
+-					SDL_BlitSurface(key_txt, NULL, version, &(SDL_Rect){0,SCALE1(VERSION_LINE_HEIGHT*2)});
+-					SDL_BlitSurface(val_txt, NULL, version, &(SDL_Rect){x,SCALE1(VERSION_LINE_HEIGHT*2)});
+-					
+-					SDL_FreeSurface(release_txt);
+-					SDL_FreeSurface(version_txt);
+-					SDL_FreeSurface(commit_txt);
+-					SDL_FreeSurface(hash_txt);
+-					SDL_FreeSurface(key_txt);
+-					SDL_FreeSurface(val_txt);
+-					SDL_Surface* fixedmode_txt = TTF_RenderUTF8_Blended(font.large, "Mode", COLOR_DARK_TEXT);
+-					SDL_Surface* mode_txt = TTF_RenderUTF8_Blended(font.large, modeStr, COLOR_WHITE);
+-					SDL_BlitSurface(fixedmode_txt, NULL, version, &(SDL_Rect){0,SCALE1(VERSION_LINE_HEIGHT*3)});
+-					SDL_BlitSurface(mode_txt, NULL, version, &(SDL_Rect){x,SCALE1(VERSION_LINE_HEIGHT*3)});
+-					SDL_FreeSurface(fixedmode_txt);
+-					SDL_FreeSurface(mode_txt);
+-				//}
+-				SDL_BlitSurface(version, NULL, screen, &(SDL_Rect){(screen->w-version->w)/2,(screen->h-version->h)/4});
++				About_draw(screen, modeStr);
+ 				
+ 				// buttons (duped and trimmed from below)
+ 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting, fancy_mode);
+@@ -2145,7 +2608,10 @@ int main (int argc, char *argv[]) {
  			}
  			else {
  				// list
@@ -2320,7 +2532,7 @@ index 6fcba42..2434ddb 100644
  					int selected_row = top->selected - top->start;
  						/*  start entry for boxart and save state preview window*/
  					if (fancy_mode) {  //only when fancy_mode is active
-@@ -2245,6 +2636,22 @@ int main (int argc, char *argv[]) {
+@@ -2245,6 +2711,22 @@ int main (int argc, char *argv[]) {
  						//}
  						//myentry1 = NULL;
  						GFX_blitHardwareGroup(screen, show_setting, fancy_mode);
