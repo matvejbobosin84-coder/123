@@ -607,10 +607,10 @@ index 0000000..04b23d3
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..0ca3b56
+index 0000000..cac9e31
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
-@@ -0,0 +1,227 @@
+@@ -0,0 +1,202 @@
 +// Standby screen (clock + animation) shown before the real sleep.
 +// Included from api.c.
 +//  - Disable:  create empty file  .userdata/shared/disable-standby
@@ -634,7 +634,7 @@ index 0000000..0ca3b56
 +}
 +
 +// gradient background with slowly drifting coloured blobs (no files needed)
-+static void SB_drawBackground(SDL_Surface* d, unsigned ms) {
++static void SB_gradient(SDL_Surface* d) {
 +	int W = d->w, H = d->h;
 +	for (int y=0; y<H; y++) {
 +		int r = 11 + (22-11)*y/H;
@@ -642,6 +642,10 @@ index 0000000..0ca3b56
 +		int b = 40 + (70-40)*y/H;
 +		SDL_FillRect(d, &(SDL_Rect){0,y,W,1}, SDL_MapRGB(d->format, r, g, b));
 +	}
++}
++static void SB_drawBackground(SDL_Surface* d, unsigned ms) {
++	int W = d->w, H = d->h;
++	SB_gradient(d);
 +	static const unsigned char col[5][3] = {
 +		{0x4B,0x6E,0x16}, {0x45,0x28,0x84}, {0x7A,0x2A,0x52}, {0x0B,0x6B,0x7A}, {0x8A,0x4A,0x12}
 +	};
@@ -793,48 +797,19 @@ index 0000000..0ca3b56
 +}
 +
 +
-+// "LOADING" screen shown while a game / program is starting
++// Logo screen shown while a game / program is starting:
++// dark blue background + .system/res/loading.png (any PNG; replace it with your own logo)
 +void GFX_showLoading(void) {
 +	SDL_Surface* screen = gfx.screen;
 +	if (!screen) return;
 +
-+	SDL_Surface* img = IMG_Load(STANDBY_DIR "/0.png");
-+	SDL_Surface* conv = img ? SDL_ConvertSurface(img, screen->format, 0) : NULL;
-+	if (img) SDL_FreeSurface(img);
-+	if (conv) { SB_blitFrame(screen, conv); SDL_FreeSurface(conv); }
-+	else SB_drawBackground(screen, 0);
-+
-+	TTF_Font* f = TTF_OpenFont(RES_PATH "/loading.otf", SCALE1(40));
-+	int own = f!=NULL;
-+	if (!f) f = font.large;
-+
-+	const char* word = "LOADING";
-+	int spacing = SCALE1(7);
-+	int total = 0, n = (int)strlen(word);
-+	int wch[16];
-+	for (int i=0; i<n; i++) {
-+		char ch[2] = {word[i], 0};
-+		wch[i] = UI_textWidth(f, ch);
-+		total += wch[i] + (i<n-1 ? spacing : 0);
++	SB_gradient(screen);
++	SDL_Surface* logo = IMG_Load(RES_PATH "/loading.png");
++	if (logo) {
++		SDL_Rect dst = {(screen->w-logo->w)/2, (screen->h-logo->h)/2, logo->w, logo->h};
++		SDL_BlitSurface(logo, NULL, screen, &dst);
++		SDL_FreeSurface(logo);
 +	}
-+	int y = screen->h*38/100;
-+	int x = (screen->w - total)/2;
-+	for (int i=0; i<n; i++) {
-+		char ch[2] = {word[i], 0};
-+		SDL_Surface* sh = UI_text(f, ch, (SDL_Color){0,0,0});
-+		SDL_Surface* t = UI_text(f, ch, (SDL_Color){0xE8,0xEA,0xFF});
-+		if (sh) { SDL_BlitSurface(sh, NULL, screen, &(SDL_Rect){x+FIXED_SCALE*2, y+FIXED_SCALE*2}); SDL_FreeSurface(sh); }
-+		if (t) { SDL_BlitSurface(t, NULL, screen, &(SDL_Rect){x, y}); SDL_FreeSurface(t); }
-+		x += wch[i] + spacing;
-+	}
-+	// thin ornament under the word
-+	int lw = total*70/100;
-+	int ly = y + SCALE1(54);
-+	Uint32 line = SDL_MapRGB(screen->format, 0x8B,0x7B,0xD8);
-+	SDL_FillRect(screen, &(SDL_Rect){(screen->w-lw)/2, ly, lw, FIXED_SCALE}, line);
-+	UI_fillRound(screen, screen->w/2-FIXED_SCALE*3, ly-FIXED_SCALE*2, FIXED_SCALE*6, FIXED_SCALE*6, FIXED_SCALE*3, line);
-+
-+	if (own) TTF_CloseFont(f);
 +	GFX_flip(screen);
 +	GFX_pan();
 +}
@@ -932,7 +907,7 @@ index 0000000..a34d22d
 +	}
 +}
 diff --git a/workspace/all/minarch/minarch.c b/workspace/all/minarch/minarch.c
-index 997b0af..dbbd562 100644
+index 997b0af..a466f2e 100644
 --- a/workspace/all/minarch/minarch.c
 +++ b/workspace/all/minarch/minarch.c
 @@ -1836,9 +1836,10 @@ static void OptionList_init(const struct retro_core_option_definition *defs) {
@@ -961,14 +936,6 @@ index 997b0af..dbbd562 100644
  				GFX_wrapText(font.tiny, item->desc, DEVICE_WIDTH - SCALE1(2*PADDING), 2);
  			}
  
-@@ -6012,6 +6014,7 @@ int main(int argc , char* argv[]) {
- 	}
- 	sprintf(cpuload,"0");
- 	screen = GFX_init(MODE_MENU);
-+	GFX_showLoading();
- 	screengame = PLAT_getScreenGame();
- 	renderer.rotate = (renderer.rotate + PLAT_getScreenRotation(1)) & 3;
- 	setOverclock(overclock); // default to normal
 diff --git a/workspace/all/minui/minui.c b/workspace/all/minui/minui.c
 index 6fcba42..a55503d 100644
 --- a/workspace/all/minui/minui.c
