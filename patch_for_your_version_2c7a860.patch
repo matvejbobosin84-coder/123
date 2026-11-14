@@ -840,10 +840,10 @@ index 0000000..0ca3b56
 +}
 diff --git a/workspace/all/common/uihelp_impl.h b/workspace/all/common/uihelp_impl.h
 new file mode 100644
-index 0000000..79ec550
+index 0000000..a34d22d
 --- /dev/null
 +++ b/workspace/all/common/uihelp_impl.h
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,87 @@
 +// Small drawing helpers shared by the new UI parts (included from api.c)
 +
 +// filled rounded rectangle using only SDL_FillRect (works for any pixel format)
@@ -884,6 +884,7 @@ index 0000000..79ec550
 +}
 +
 +static void UI_drawBattery(SDL_Surface* dst, int x, int y, int cell_h, int with_text) {
++	if (!dst) return; // the overlay surface does not exist on some platforms
 +	int u = FIXED_SCALE;
 +	int pct = pwr.charge;
 +	if (pct<0) pct = 0;
