@@ -1,3 +1,17 @@
+diff --git a/skeleton/SYSTEM/m21/paks/MinUI.pak/launch.sh b/skeleton/SYSTEM/m21/paks/MinUI.pak/launch.sh
+index d445dda..ab05a50 100755
+--- a/skeleton/SYSTEM/m21/paks/MinUI.pak/launch.sh
++++ b/skeleton/SYSTEM/m21/paks/MinUI.pak/launch.sh
+@@ -26,7 +26,8 @@ if [ "${TMPSTR}NULL" = "NULL" ]; then
+ 	export NEWDTB=1
+ fi
+ 
+-echo 1 > /sys/class/disp/disp/attr/colorbar
++# colour bars hide the display switch; off by default, create .userdata/shared/enable-colorbar to bring them back
++[ -f "$SHARED_USERDATA_PATH/enable-colorbar" ] && echo 1 > /sys/class/disp/disp/attr/colorbar
+ export PATH=$SYSTEM_PATH/bin:$PATH
+ export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
+ export SDL_NOMOUSE=1
 diff --git a/skeleton/SYSTEM/res/lang.txt b/skeleton/SYSTEM/res/lang.txt
 new file mode 100644
 index 0000000..6aa5767
@@ -707,7 +721,7 @@ index 0000000..dea1499
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..3d4262e
+index 0000000..d6792f4
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
 @@ -0,0 +1,306 @@
@@ -721,7 +735,7 @@ index 0000000..3d4262e
 +
 +#define STANDBY_DISABLE_PATH SHARED_USERDATA_PATH "/disable-standby"
 +#define STANDBY_DIR RES_PATH "/standby"
-+#define STANDBY_MAX_FRAMES 150
++#define STANDBY_MAX_FRAMES 240
 +#define STANDBY_SECONDS 300 // default when not charging; while charging it stays on
 +#define STANDBY_SECONDS_PATH SHARED_USERDATA_PATH "/standby-seconds" // optional: file with a number
 +#define STANDBY_SECONDS_PATH2 SHARED_USERDATA_PATH "/standby-seconds.txt" // Windows often hides the .txt
