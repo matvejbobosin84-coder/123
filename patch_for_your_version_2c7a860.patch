@@ -721,10 +721,10 @@ index 0000000..dea1499
 +}
 diff --git a/workspace/all/common/standby_impl.h b/workspace/all/common/standby_impl.h
 new file mode 100644
-index 0000000..d6792f4
+index 0000000..dd0254e
 --- /dev/null
 +++ b/workspace/all/common/standby_impl.h
-@@ -0,0 +1,306 @@
+@@ -0,0 +1,351 @@
 +// Standby screen (clock + animation) shown before the real sleep.
 +// Included from api.c.
 +//  - Disable:  create empty file  .userdata/shared/disable-standby
@@ -811,12 +811,35 @@ index 0000000..d6792f4
 +	return (TTF_RenderUTF8_Blended)(f, s, c); // parentheses: skip the translation macro
 +}
 +
++// text with a shadow is rendered once and cached (rendering TTF text every frame is slow on this CPU)
++typedef struct { TTF_Font* f; char s[64]; Uint32 col; SDL_Surface* sh; SDL_Surface* fg; } SB_TextCache;
++static SB_TextCache sb_tc[4];
++static int sb_tc_next = 0;
++static void SB_cacheFlush(void) {
++	for (int i=0; i<4; i++) {
++		if (sb_tc[i].sh) SDL_FreeSurface(sb_tc[i].sh);
++		if (sb_tc[i].fg) SDL_FreeSurface(sb_tc[i].fg);
++		sb_tc[i].sh = sb_tc[i].fg = NULL; sb_tc[i].f = NULL; sb_tc[i].s[0] = '\0';
++	}
++	sb_tc_next = 0;
++}
 +static void SB_blitCentered(SDL_Surface* d, TTF_Font* f, const char* s, int y, SDL_Color c) {
 +	int sh = FIXED_SCALE;
-+	SDL_Surface* t = SB_text(f, s, (SDL_Color){0,0,0});
-+	if (t) { SDL_BlitSurface(t, NULL, d, &(SDL_Rect){(d->w-t->w)/2+sh+1, y+sh+1}); SDL_FreeSurface(t); }
-+	t = SB_text(f, s, c);
-+	if (t) { SDL_BlitSurface(t, NULL, d, &(SDL_Rect){(d->w-t->w)/2, y}); SDL_FreeSurface(t); }
++	Uint32 col = ((Uint32)c.r<<16) | ((Uint32)c.g<<8) | c.b;
++	SB_TextCache* e = NULL;
++	for (int i=0; i<4; i++) if (sb_tc[i].fg && sb_tc[i].f==f && sb_tc[i].col==col && strcmp(sb_tc[i].s, s)==0) { e = &sb_tc[i]; break; }
++	if (!e) {
++		e = &sb_tc[sb_tc_next];
++		sb_tc_next = (sb_tc_next+1)%4;
++		if (e->sh) SDL_FreeSurface(e->sh);
++		if (e->fg) SDL_FreeSurface(e->fg);
++		e->f = f; e->col = col;
++		snprintf(e->s, sizeof(e->s), "%s", s);
++		e->sh = SB_text(f, s, (SDL_Color){0,0,0});
++		e->fg = SB_text(f, s, c);
++	}
++	if (e->sh) SDL_BlitSurface(e->sh, NULL, d, &(SDL_Rect){(d->w-e->sh->w)/2+sh+1, y+sh+1});
++	if (e->fg) SDL_BlitSurface(e->fg, NULL, d, &(SDL_Rect){(d->w-e->fg->w)/2, y});
 +}
 +
 +static int SB_loadFrames(SDL_Surface** frames) {
@@ -836,6 +859,26 @@ index 0000000..d6792f4
 +}
 +
 +static void SB_blitFrame(SDL_Surface* d, SDL_Surface* f) {
++	// fast path: exact 2x pixel doubling (SDL_BlitScaled is too slow here and limits the frame rate)
++	int bpp = d->format->BytesPerPixel;
++	if (d->w==f->w*2 && d->h==f->h*2 && f->format->BytesPerPixel==bpp && (bpp==2 || bpp==4)) {
++		for (int y=0; y<f->h; y++) {
++			Uint8* sp = (Uint8*)f->pixels + (size_t)y*f->pitch;
++			Uint8* r0 = (Uint8*)d->pixels + (size_t)(2*y)*d->pitch;
++			if (bpp==2) {
++				const Uint16* s16 = (const Uint16*)sp;
++				Uint32* d32 = (Uint32*)r0;
++				for (int x=0; x<f->w; x++) { Uint32 p = s16[x]; d32[x] = p | (p<<16); }
++			}
++			else {
++				const Uint32* s32 = (const Uint32*)sp;
++				Uint32* d32 = (Uint32*)r0;
++				for (int x=0; x<f->w; x++) { d32[2*x] = s32[x]; d32[2*x+1] = s32[x]; }
++			}
++			memcpy(r0 + d->pitch, r0, (size_t)d->w*bpp);
++		}
++		return;
++	}
 +	// "cover": fill the screen keeping the aspect ratio, crop the rest
 +	SDL_Rect src = {0,0,f->w,f->h};
 +	if ((long)f->w*d->h > (long)f->h*d->w) { // frame is wider
@@ -854,6 +897,7 @@ index 0000000..d6792f4
 +
 +	SDL_Surface* screen = gfx.screen;
 +	SDL_PauseAudio(1);
++	SB_cacheFlush();
 +
 +	TTF_Font* big = TTF_OpenFont(FONT_PATH, SCALE1(44));
 +	if (!big) big = font.large;
@@ -942,6 +986,7 @@ index 0000000..d6792f4
 +	}
 +
 +	for (int i=0; i<nframes; i++) SDL_FreeSurface(frames[i]);
++	SB_cacheFlush();
 +	if (big!=font.large) TTF_CloseFont(big);
 +	if (woke) SDL_PauseAudio(0);
 +	return woke;
